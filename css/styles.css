@@ -18,29 +18,31 @@ input[type=range] {
 
 #editor-canvas {
   touch-action: pan-y;
+  cursor: default;
 }
 
 #editor-canvas.touch-pan-mode {
   touch-action: none;
+  cursor: grab;
+}
+
+#editor-canvas.touch-pan-mode:active {
+  cursor: grabbing;
 }
 
 .touch-pan-controls {
-  display: none;
+  display: flex;
+}
+
+#toggle-photo-pan[aria-pressed="true"] {
+  background-color: #be123c;
+}
+
+#toggle-photo-pan[aria-pressed="true"]:hover {
+  background-color: #e11d48;
 }
 
 @media (hover: none) and (pointer: coarse) {
-  .touch-pan-controls {
-    display: flex;
-  }
-
-  #toggle-photo-pan[aria-pressed="true"] {
-    background-color: #be123c;
-  }
-
-  #toggle-photo-pan[aria-pressed="true"]:hover {
-    background-color: #e11d48;
-  }
-
   .desktop-pan-hint {
     display: none;
   }

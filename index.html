@@ -112,15 +112,15 @@
 
           <div class="touch-pan-controls w-full max-w-[460px] flex-col items-center gap-2">
             <button type="button" id="toggle-photo-pan" onclick="togglePhotoPanMode()" aria-pressed="false" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition">
-              <i class="fa-solid fa-hand-pointer mr-1"></i><span id="photo-pan-button-label">Enable Pan</span>
+              <i class="fa-solid fa-hand-pointer mr-1"></i><span id="photo-pan-button-label">Enable Pan &amp; Zoom</span>
             </button>
             <p id="photo-pan-status" role="status" aria-live="polite" class="text-[11px] text-slate-400 text-center">
-              Pan is off. Swipe the canvas to scroll, or enable pan to move the photo.
+              Pan and zoom are off. Enable them to drag, scroll to zoom, or pinch to zoom.
             </p>
           </div>
 
           <p id="stage-drag-hint" class="desktop-pan-hint text-[11px] text-slate-400 flex items-center gap-1.5">
-            <i class="fa-solid fa-hand-pointer text-indigo-400"></i> Drag the photo to pan it behind the fixed preset mask
+            <i class="fa-solid fa-hand-pointer text-indigo-400"></i> Enable pan and zoom to drag the photo or scroll to zoom
           </p>
         </div>
       </div>
