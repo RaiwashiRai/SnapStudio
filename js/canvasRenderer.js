@@ -8,6 +8,9 @@ let photoScale = 1.0;
 let isDragging = false;
 let dragStartX = 0;
 let dragStartY = 0;
+let activePointerId = null;
+let activePointerType = null;
+let isPhotoPanModeEnabled = false;
 
 let editorCanvas, editorCtx;
 let presetLoadToken = 0;
@@ -166,6 +169,28 @@ function updatePhotoScale(val) {
   redrawEditorCanvas();
 }
 
+function togglePhotoPanMode() {
+  if (!userCapturedImage) {
+    showToast('Load a photo first');
+    return;
+  }
+
+  setPhotoPanMode(!isPhotoPanModeEnabled);
+}
+
+function setPhotoPanMode(enabled) {
+  isPhotoPanModeEnabled = enabled;
+  if (editorCanvas) editorCanvas.classList.toggle('touch-pan-mode', enabled);
+
+  const button = document.getElementById('toggle-photo-pan');
+  if (button) {
+    button.setAttribute('aria-pressed', String(enabled));
+    button.innerHTML = enabled
+      ? '<i class="fa-solid fa-hand-pointer mr-1"></i>Pan mode on — drag photo'
+      : '<i class="fa-solid fa-hand-pointer mr-1"></i>Pan Photo';
+  }
+}
+
 function resetPhotoZoom() {
   photoScale = 1.0;
   const scaleSlider = document.getElementById('slider-photo-scale');
@@ -287,42 +312,48 @@ function setupCanvasInteractions() {
     const rect = editorCanvas.getBoundingClientRect();
     const scaleX = editorCanvas.width / rect.width;
     const scaleY = editorCanvas.height / rect.height;
-    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
     return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY
     };
   }
 
   function onStart(e) {
     if (!userCapturedImage) return;
+    if (e.pointerType === 'touch' && !isPhotoPanModeEnabled) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+
     isDragging = true;
+    activePointerId = e.pointerId;
+    activePointerType = e.pointerType;
     const pos = getCoords(e);
     dragStartX = pos.x - photoX;
     dragStartY = pos.y - photoY;
+    editorCanvas.setPointerCapture(e.pointerId);
   }
 
   function onMove(e) {
-    if (!isDragging) return;
+    if (!isDragging || e.pointerId !== activePointerId) return;
     const pos = getCoords(e);
     photoX = pos.x - dragStartX;
     photoY = pos.y - dragStartY;
     redrawEditorCanvas();
-    if (e.cancelable) e.preventDefault();
+    if (activePointerType === 'touch' && e.cancelable) e.preventDefault();
   }
 
-  function onEnd() {
+  function onEnd(e) {
+    if (!isDragging || (e && e.pointerId !== activePointerId)) return;
+    const wasTouchPan = activePointerType === 'touch';
     isDragging = false;
+    activePointerId = null;
+    activePointerType = null;
+    if (wasTouchPan) setPhotoPanMode(false);
   }
 
-  editorCanvas.addEventListener('mousedown', onStart);
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup', onEnd);
-
-  editorCanvas.addEventListener('touchstart', onStart, { passive: false });
-  window.addEventListener('touchmove', onMove, { passive: false });
-  window.addEventListener('touchend', onEnd);
+  editorCanvas.addEventListener('pointerdown', onStart);
+  editorCanvas.addEventListener('pointermove', onMove);
+  editorCanvas.addEventListener('pointerup', onEnd);
+  editorCanvas.addEventListener('pointercancel', onEnd);
 }
 
 function downloadCanvasComposite() {

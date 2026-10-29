@@ -15,3 +15,25 @@ body { font-family: 'Inter', sans-serif; }
 input[type=range] {
   accent-color: #6366f1;
 }
+
+#editor-canvas {
+  touch-action: pan-y;
+}
+
+#editor-canvas.touch-pan-mode {
+  touch-action: none;
+}
+
+.touch-pan-controls {
+  display: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .touch-pan-controls {
+    display: flex;
+  }
+
+  .desktop-pan-hint {
+    display: none;
+  }
+}
