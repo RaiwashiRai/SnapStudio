@@ -156,6 +156,7 @@ function resetPhotoPlacement() {
   if (!editorCanvas) return;
   resetPhotoAnchor();
   photoScale = 1.0;
+  setPhotoPanMode(false);
 
   const scaleSlider = document.getElementById('slider-photo-scale');
   if (scaleSlider) scaleSlider.value = 1.0;
@@ -185,9 +186,15 @@ function setPhotoPanMode(enabled) {
   const button = document.getElementById('toggle-photo-pan');
   if (button) {
     button.setAttribute('aria-pressed', String(enabled));
-    button.innerHTML = enabled
-      ? '<i class="fa-solid fa-hand-pointer mr-1"></i>Pan mode on — drag photo'
-      : '<i class="fa-solid fa-hand-pointer mr-1"></i>Pan Photo';
+    const label = document.getElementById('photo-pan-button-label');
+    if (label) label.textContent = enabled ? 'Disable Pan' : 'Enable Pan';
+  }
+
+  const status = document.getElementById('photo-pan-status');
+  if (status) {
+    status.textContent = enabled
+      ? 'Pan is on. Drag the photo on the canvas; tap Disable Pan to scroll the page there.'
+      : 'Pan is off. Swipe the canvas to scroll, or enable pan to move the photo.';
   }
 }
 
@@ -343,11 +350,9 @@ function setupCanvasInteractions() {
 
   function onEnd(e) {
     if (!isDragging || (e && e.pointerId !== activePointerId)) return;
-    const wasTouchPan = activePointerType === 'touch';
     isDragging = false;
     activePointerId = null;
     activePointerType = null;
-    if (wasTouchPan) setPhotoPanMode(false);
   }
 
   editorCanvas.addEventListener('pointerdown', onStart);
