@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnapStudio - Photo Booth Stage</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Inter:wght@300;400;600;700;900&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between antialiased selection:bg-indigo-600 selection:text-white">
+
+  <!-- HEADER NAVIGATION -->
+  <header class="w-full border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 px-4 py-3">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.href='index.html'">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
+        </div>
+        <div>
+          <span class="font-extrabold tracking-tight text-slate-100 text-lg">SnapStudio</span>
+          <span class="ml-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">Photo Booth</span>
+        </div>
+      </div>
+
+      <nav class="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+        <a href="index.html" class="px-3.5 py-1.5 rounded-lg font-semibold transition-all bg-indigo-600 text-white shadow-sm">
+          <i class="fa-solid fa-camera mr-1"></i> Editor Stage
+        </a>
+        <a href="creator.html" class="px-3.5 py-1.5 rounded-lg font-semibold transition-all text-slate-400 hover:text-slate-200">
+          <i class="fa-solid fa-sliders mr-1"></i> Preset Creator
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-grow flex items-center justify-center p-3 sm:p-6">
+    <section class="w-full max-w-5xl space-y-6">
+      
+      <div class="text-center space-y-1">
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Framed Photo Booth Stage</h1>
+        <p class="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">Load your photo, use the zoom slider and drag to position it behind the template, customize text, and download a PNG.</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Viewport Stage / Canvas Area -->
+        <div class="lg:col-span-7 flex flex-col items-center gap-3">
+          
+          <div id="editor-stage-viewport" class="relative w-full max-w-[460px] rounded-2xl overflow-hidden border border-slate-800 checkerboard shadow-2xl">
+            <canvas id="editor-canvas" width="800" height="800" class="w-full h-full object-contain cursor-grab active:cursor-grabbing touch-none"></canvas>
+          </div>
+
+          <button onclick="downloadCanvasComposite()" class="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-download"></i> Download PNG
+          </button>
+
+          <p id="stage-drag-hint" class="text-[11px] text-slate-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-hand-pointer text-indigo-400"></i> Drag or swipe to pan the photo behind the fixed preset mask
+          </p>
+        </div>
+
+        <!-- Sidebar Controls Form -->
+        <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl text-xs">
+          
+          <!-- STEP 1: Image Upload -->
+          <div class="space-y-2 border-b border-slate-800 pb-3">
+            <label class="font-bold text-slate-300 uppercase tracking-wider block text-[11px]">1. Image Acquisition</label>
+            <label class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 transition flex items-center justify-center gap-2 cursor-pointer text-center">
+              <i class="fa-solid fa-upload"></i> Upload Photo
+              <input type="file" accept="image/*" onchange="handlePhotoUpload(event)" class="hidden">
+            </label>
+          </div>
+
+          <!-- STEP 2: Select Preset -->
+          <div class="space-y-2 border-b border-slate-800 pb-3">
+            <label class="font-bold text-slate-300 uppercase tracking-wider text-[11px]">2. Select Preset</label>
+            <select id="preset-selector" onchange="applySelectedPreset(this.value)" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"></select>
+          </div>
+
+          <!-- STEP 3: Photo Scale & Pan -->
+          <div class="space-y-2 border-b border-slate-800 pb-3">
+            <label class="font-bold text-slate-300 uppercase tracking-wider block text-[11px]">3. Photo Scale & Pan</label>
+            <div class="text-[11px]">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Zoom Scale</span>
+                <button type="button" onclick="resetPhotoZoom()" class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white" title="Reset zoom" aria-label="Reset zoom">
+                  <i class="fa-solid fa-rotate-left mr-1"></i>Reset
+                </button>
+              </div>
+              <input type="range" id="slider-photo-scale" min="0.2" max="3.5" step="0.05" value="1" oninput="updatePhotoScale(this.value)" class="w-full">
+            </div>
+          </div>
+
+          <!-- STEP 4: Custom Typography -->
+          <div class="space-y-2 border-b border-slate-800 pb-3">
+            <label class="font-bold text-slate-300 uppercase tracking-wider block text-[11px]">4. Custom Typography</label>
+            <input type="text" id="input-editor-text" value="ALEX RIVERA" placeholder="Enter custom text..." oninput="redrawEditorCanvas()" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500">
+            <div class="grid grid-cols-3 gap-2 text-[10px]">
+              <div>
+                <span class="text-slate-400">Text X %</span>
+                <input type="range" id="slider-text-x" min="0" max="100" value="50" oninput="redrawEditorCanvas()" class="w-full">
+              </div>
+              <div>
+                <span class="text-slate-400">Text Y %</span>
+                <input type="range" id="slider-text-y" min="0" max="100" value="88" oninput="redrawEditorCanvas()" class="w-full">
+              </div>
+              <div>
+                <span class="text-slate-400">Size (px)</span>
+                <input type="range" id="slider-font-size" min="12" max="80" step="1" value="32" oninput="redrawEditorCanvas()" class="w-full">
+              </div>
+            </div>
+            <div class="flex items-center justify-between text-[11px] pt-1">
+              <span class="text-slate-400">Text Color</span>
+              <input type="color" id="picker-text-color" value="#ffffff" onchange="redrawEditorCanvas()" class="w-7 h-7 rounded bg-transparent cursor-pointer">
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="w-full border-t border-slate-900 py-3 text-center text-[11px] text-slate-500">
+    SnapStudio • Pure Client-Side Application
+  </footer>
+
+  <div id="toast-message" class="fixed bottom-5 right-5 bg-slate-900 border border-slate-800 text-white px-4 py-3 rounded-xl shadow-2xl transform translate-y-24 opacity-0 transition-all duration-300 z-50 text-xs font-semibold flex items-center gap-2">
+    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toast-text">Action completed</span>
+  </div>
+
+  <!-- Modular Scripts -->
+  <script src="./js/state.js"></script>
+  <script src="./js/compositor.js"></script>
+  <script src="./js/canvasRenderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnapStudio - Preset & Template Creator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Inter:wght@300;400;600;700;900&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between antialiased selection:bg-purple-600 selection:text-white">
+
+  <!-- HEADER NAVIGATION -->
+  <header class="w-full border-b border-slate-800/80 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50 px-4 py-3">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="window.location.href='index.html'">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
+        </div>
+        <div>
+          <span class="font-extrabold tracking-tight text-slate-100 text-lg">SnapStudio</span>
+          <span class="ml-2 text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30">Creator</span>
+        </div>
+      </div>
+
+      <nav class="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+        <a href="index.html" class="px-3.5 py-1.5 rounded-lg font-semibold transition-all text-slate-400 hover:text-slate-200">
+          <i class="fa-solid fa-camera mr-1"></i> Editor Stage
+        </a>
+        <a href="creator.html" class="px-3.5 py-1.5 rounded-lg font-semibold transition-all bg-purple-600 text-white shadow-sm">
+          <i class="fa-solid fa-sliders mr-1"></i> Preset Creator
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-grow flex items-center justify-center p-3 sm:p-6">
+    <section class="w-full max-w-5xl space-y-6">
+      
+      <div class="text-center space-y-1">
+        <span class="text-[10px] uppercase font-bold tracking-widest px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">Developer Studio</span>
+        <h1 class="text-2xl font-extrabold text-white">Preset & Template Creator</h1>
+        <p class="text-xs text-slate-400 max-w-md mx-auto">Upload frame artwork, map initial photo placement anchor (+ marker), configure typography, and export preset JSON. To publish a preset, place its JSON in <code>presets/</code>, add its filename to <code>presets/manifest.json</code>, and use a template path relative to that JSON or the site root (for example, <code>./Templates/example.jpg</code>). Exported JSON embeds the uploaded template image.</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <div class="lg:col-span-7 flex flex-col items-center gap-2">
+          <div id="creator-stage-viewport" class="relative w-full max-w-[460px] rounded-2xl overflow-hidden border border-slate-800 checkerboard shadow-2xl flex items-center justify-center">
+            <canvas id="creator-canvas" width="800" height="800" class="w-full h-full object-contain"></canvas>
+          </div>
+          <p class="text-[11px] text-slate-400"><span class="text-blue-400 font-bold">+ Marker</span> = Initial Photo Placement Anchor | Text Target Rendered Live</p>
+        </div>
+
+        <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl text-xs">
+          
+          <div class="space-y-1.5 border-b border-slate-800 pb-3">
+            <label class="font-bold text-slate-200 block">1. Template Artwork</label>
+            <input type="file" id="input-creator-frame" accept="image/*" onchange="handleCreatorFrameUpload(event)" class="w-full text-slate-400 text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-800 file:text-slate-300 font-semibold cursor-pointer">
+          </div>
+
+          <div class="space-y-1.5 border-b border-slate-800 pb-3">
+            <label class="font-bold text-slate-200 block">Preview Photo (not saved)</label>
+            <input type="file" id="input-creator-photo" accept="image/*" onchange="handleCreatorPhotoUpload(event)" class="w-full text-slate-400 text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-800 file:text-slate-300 font-semibold cursor-pointer">
+          </div>
+
+          <div class="space-y-1.5 border-b border-slate-800 pb-3">
+            <label class="font-bold text-slate-200 block">Preset ID</label>
+            <input type="text" id="preset-id-input" value="custom_preset" oninput="redrawCreatorCanvas()" class="w-full px-2.5 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-purple-500">
+          </div>
+
+          <!-- Initial Photo Placement Anchor (+ Marker) -->
+          <div class="space-y-3 border-b border-slate-800 pb-3">
+            <span class="font-bold text-indigo-400 block">2. Initial Photo Placement Anchor (+ Marker)</span>
+            
+            <div class="space-y-1">
+              <div class="flex justify-between items-center text-[11px]">
+                <span class="text-slate-400">Anchor X %</span>
+                <div class="flex items-center gap-2">
+                  <input type="number" id="num-anchor-x" min="0" max="100" value="50" oninput="syncCreatorInput('anchor-x', this.value)" class="w-16 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-center text-xs text-slate-200">
+                  <button onclick="resetCreatorControl('anchor-x', 50)" class="text-slate-400 hover:text-white px-1.5 py-0.5 rounded bg-slate-800 text-[10px]" title="Reset"><i class="fa-solid fa-rotate-left"></i></button>
+                </div>
+              </div>
+              <input type="range" id="anchor-x" min="0" max="100" value="50" oninput="syncCreatorSlider('anchor-x', this.value)" class="w-full">
+            </div>
+
+            <div class="space-y-1">
+              <div class="flex justify-between items-center text-[11px]">
+                <span class="text-slate-400">Anchor Y %</span>
+                <div class="flex items-center gap-2">
+                  <input type="number" id="num-anchor-y" min="0" max="100" value="45" oninput="syncCreatorInput('anchor-y', this.value)" class="w-16 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-center text-xs text-slate-200">
+                  <button onclick="resetCreatorControl('anchor-y', 45)" class="text-slate-400 hover:text-white px-1.5 py-0.5 rounded bg-slate-800 text-[10px]" title="Reset"><i class="fa-solid fa-rotate-left"></i></button>
+                </div>
+              </div>
+              <input type="range" id="anchor-y" min="0" max="100" value="45" oninput="syncCreatorSlider('anchor-y', this.value)" class="w-full">
+            </div>
+          </div>
+
+          <div class="space-y-2 border-b border-slate-800 pb-3">
+            <span class="font-bold text-rose-400 block">3. Photo Mask (transparent cutout)</span>
+            <label class="flex items-center gap-2 text-slate-300"><input id="creator-mask-enabled" type="checkbox" onchange="redrawCreatorCanvas()"> Enable mask</label>
+            <select id="creator-mask-shape" onchange="redrawCreatorCanvas()" class="w-full px-2 py-1.5 rounded bg-slate-950 border border-slate-800 text-slate-200">
+              <option value="rectangle">Rectangle</option>
+              <option value="ellipse">Ellipse</option>
+              <option value="diamond">Diamond</option>
+            </select>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="text-slate-400">Horizontal offset from photo anchor (% template)<input id="creator-mask-x" type="number" min="-100" max="100" value="0" oninput="redrawCreatorCanvas()" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-slate-200"></label>
+              <label class="text-slate-400">Vertical offset from photo anchor (% template)<input id="creator-mask-y" type="number" min="-100" max="100" value="0" oninput="redrawCreatorCanvas()" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-slate-200"></label>
+              <label class="text-slate-400">Window width (% template)<input id="creator-mask-width" type="number" min="1" max="200" value="30" oninput="redrawCreatorCanvas()" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-slate-200"></label>
+              <label class="text-slate-400">Window height (% template)<input id="creator-mask-height" type="number" min="1" max="200" value="30" oninput="redrawCreatorCanvas()" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-slate-200"></label>
+            </div>
+            <label class="block text-slate-400">Mask scale <input id="creator-mask-scale" type="range" min="0.1" max="3.5" step="0.05" value="1" oninput="redrawCreatorCanvas()" class="w-full"></label>
+            <label class="block text-slate-400">Mask rotation <input id="creator-mask-rotation" type="range" min="-180" max="180" step="1" value="0" oninput="redrawCreatorCanvas()" class="w-full"></label>
+            <p class="text-[10px] text-slate-500">The mask keeps photo content inside the shape. Position is offset from the photo anchor; window size is based on the template.</p>
+          </div>
+
+          <!-- Typography -->
+          <div class="space-y-3 border-b border-slate-800 pb-3">
+            <span class="font-bold text-purple-400 block">4. Default Typography</span>
+            <input type="text" id="preset-default-text" value="GUEST NAME" oninput="redrawCreatorCanvas()" class="w-full px-2.5 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100">
+            
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="text-slate-400 text-[10px] block mb-1">Font Family</span>
+                <select id="creator-font-family" onchange="redrawCreatorCanvas()" class="w-full px-2 py-1.5 rounded bg-slate-950 border border-slate-800 text-slate-200">
+                  <option value="Inter">Inter</option>
+                  <option value="Arial">Arial</option>
+                  <option value="Courier Prime">Courier Prime</option>
+                  <option value="Playfair Display">Playfair Display</option>
+                </select>
+              </div>
+              <div>
+                <span class="text-slate-400 text-[10px] block mb-1">Font Weight</span>
+                <select id="creator-font-weight" onchange="redrawCreatorCanvas()" class="w-full px-2 py-1.5 rounded bg-slate-950 border border-slate-800 text-slate-200">
+                  <option value="bold">Bold</option>
+                  <option value="normal">Normal</option>
+                  <option value="900">Black</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 border-b border-slate-800 pb-3">
+              <label class="text-slate-400">Photo z-index<input id="creator-photo-z" type="number" value="0" oninput="redrawCreatorCanvas()" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-slate-200"></label>
+              <label class="text-slate-400">Template z-index<input id="creator-template-z" type="number" value="2" oninput="redrawCreatorCanvas()" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-slate-200"></label>
+              <label class="text-slate-400">Text z-index<input id="creator-text-z" type="number" value="3" oninput="redrawCreatorCanvas()" class="w-full px-2 py-1 rounded bg-slate-950 border border-slate-800 text-slate-200"></label>
+            </div>
+
+            <div class="space-y-1">
+              <div class="flex justify-between items-center text-[11px]">
+                <span class="text-slate-400">Text X %</span>
+                <div class="flex items-center gap-2">
+                  <input type="number" id="num-text-x-percent" min="5" max="95" value="50" oninput="syncCreatorInput('text-x-percent', this.value)" class="w-16 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-center text-xs text-slate-200">
+                  <button onclick="resetCreatorControl('text-x-percent', 50)" class="text-slate-400 hover:text-white px-1.5 py-0.5 rounded bg-slate-800 text-[10px]" title="Reset"><i class="fa-solid fa-rotate-left"></i></button>
+                </div>
+              </div>
+              <input type="range" id="text-x-percent" min="5" max="95" value="50" oninput="syncCreatorSlider('text-x-percent', this.value)" class="w-full">
+            </div>
+
+            <div class="space-y-1">
+              <div class="flex justify-between items-center text-[11px]">
+                <span class="text-slate-400">Text Y %</span>
+                <div class="flex items-center gap-2">
+                  <input type="number" id="num-text-y-percent" min="10" max="95" value="88" oninput="syncCreatorInput('text-y-percent', this.value)" class="w-16 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-center text-xs text-slate-200">
+                  <button onclick="resetCreatorControl('text-y-percent', 88)" class="text-slate-400 hover:text-white px-1.5 py-0.5 rounded bg-slate-800 text-[10px]" title="Reset"><i class="fa-solid fa-rotate-left"></i></button>
+                </div>
+              </div>
+              <input type="range" id="text-y-percent" min="10" max="95" value="88" oninput="syncCreatorSlider('text-y-percent', this.value)" class="w-full">
+            </div>
+
+            <div class="space-y-1">
+              <div class="flex justify-between items-center text-[11px]">
+                <span class="text-slate-400">Font Size (px)</span>
+                <div class="flex items-center gap-2">
+                  <input type="number" id="num-preset-font-size" min="14" max="64" value="32" oninput="syncCreatorInput('preset-font-size', this.value)" class="w-16 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-center text-xs text-slate-200">
+                  <button onclick="resetCreatorControl('preset-font-size', 32)" class="text-slate-400 hover:text-white px-1.5 py-0.5 rounded bg-slate-800 text-[10px]" title="Reset"><i class="fa-solid fa-rotate-left"></i></button>
+                </div>
+              </div>
+              <input type="range" id="preset-font-size" min="14" max="64" value="32" oninput="syncCreatorSlider('preset-font-size', this.value)" class="w-full">
+            </div>
+            
+            <div class="flex items-center justify-between text-[11px] pt-1">
+              <span class="text-slate-400">Text Color</span>
+              <input type="color" id="preset-text-color" value="#ffffff" onchange="redrawCreatorCanvas()" class="w-7 h-7 rounded bg-transparent cursor-pointer">
+            </div>
+          </div>
+
+          <div class="space-y-2 pt-1">
+            <button onclick="exportCreatorPresetJSON()" class="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-file-code"></i> Export Preset JSON File
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="w-full border-t border-slate-900 py-3 text-center text-[11px] text-slate-500">
+    SnapStudio • Pure Client-Side Application
+  </footer>
+
+  <div id="toast-message" class="fixed bottom-5 right-5 bg-slate-900 border border-slate-800 text-white px-4 py-3 rounded-xl shadow-2xl transform translate-y-24 opacity-0 transition-all duration-300 z-50 text-xs font-semibold flex items-center gap-2">
+    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toast-text">Action completed</span>
+  </div>
+
+  <script src="./js/state.js"></script>
+  <script src="./js/compositor.js"></script>
+  <script src="./js/creator.js"></script>
+</body>
+</html>
