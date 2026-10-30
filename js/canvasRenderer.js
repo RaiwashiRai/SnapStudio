@@ -8,6 +8,7 @@ let activePresetFrameImg = null;
 let photoX = 400;
 let photoY = 400;
 let photoScale = 1.0;
+let photoRotation = 0;
 
 let isDragging = false;
 let dragStartX = 0;
@@ -298,10 +299,14 @@ function resetPhotoPlacement() {
   if (!editorCanvas) return;
   resetPhotoAnchor();
   photoScale = 1.0;
+  photoRotation = 0;
   setPhotoPanMode(false);
 
   const scaleSlider = document.getElementById('slider-photo-scale');
   if (scaleSlider) scaleSlider.value = 1.0;
+  const rotationSlider = document.getElementById('slider-photo-rotation');
+  if (rotationSlider) rotationSlider.value = 0;
+  updatePhotoRotationDisplay();
 
   redrawEditorCanvas();
   showToast('Image loaded to Canvas Stage');
@@ -309,6 +314,25 @@ function resetPhotoPlacement() {
 
 function updatePhotoScale(val) {
   setPhotoScale(parseFloat(val));
+  redrawEditorCanvas();
+}
+
+function updatePhotoRotation(val) {
+  photoRotation = Math.min(180, Math.max(-180, parseFloat(val)));
+  updatePhotoRotationDisplay();
+  redrawEditorCanvas();
+}
+
+function updatePhotoRotationDisplay() {
+  const rotationValue = document.getElementById('photo-rotation-value');
+  if (rotationValue) rotationValue.textContent = `${photoRotation}°`;
+}
+
+function resetPhotoRotation() {
+  photoRotation = 0;
+  const rotationSlider = document.getElementById('slider-photo-rotation');
+  if (rotationSlider) rotationSlider.value = 0;
+  updatePhotoRotationDisplay();
   redrawEditorCanvas();
 }
 
@@ -418,7 +442,7 @@ function redrawEditorCanvas() {
           y: photoY,
           drawWidth: drawW,
           drawHeight: drawH,
-          rotation: 0,
+          rotation: photoRotation,
           maskAnchorX: W * Number(activePreset.anchorXPercent ?? 50) / 100,
           maskAnchorY: H * Number(activePreset.anchorYPercent ?? 45) / 100,
           masks: activePreset.masks || []

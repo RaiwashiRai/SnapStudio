@@ -41,7 +41,7 @@
       
       <div class="text-center space-y-1">
         <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Framed Photo Booth Stage</h1>
-        <p class="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">Load a photo, adjust its zoom and position, customize the text, and download a PNG.</p>
+        <p class="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">Load a photo, adjust its zoom, rotation and position, customize the text, and download a PNG.</p>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -98,7 +98,7 @@
             </label>
           </div>
 
-          <!-- STEP 3: Photo Scale & Pan -->
+          <!-- STEP 3: Photo Scale, Rotation & Pan -->
           <div class="space-y-2 border-b border-slate-800 pb-3">
             <label class="font-bold text-slate-300 uppercase tracking-wider block text-[11px]">Adjust photo</label>
             <div class="text-[11px]">
@@ -109,6 +109,15 @@
                 </button>
               </div>
               <input type="range" id="slider-photo-scale" min="0.2" max="3.5" step="0.05" value="1" oninput="updatePhotoScale(this.value)" class="w-full">
+            </div>
+            <div class="text-[11px]">
+              <div class="flex items-center justify-between">
+                <label for="slider-photo-rotation" class="text-slate-400">Rotation <span id="photo-rotation-value">0°</span></label>
+                <button type="button" onclick="resetPhotoRotation()" class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white" title="Reset rotation" aria-label="Reset rotation">
+                  <i class="fa-solid fa-rotate-left mr-1"></i>Reset
+                </button>
+              </div>
+              <input type="range" id="slider-photo-rotation" min="-180" max="180" step="1" value="0" oninput="updatePhotoRotation(this.value)" class="w-full">
             </div>
           </div>
 
