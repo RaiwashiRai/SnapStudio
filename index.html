@@ -56,7 +56,7 @@
               <i class="fa-solid fa-upload"></i> Choose Photo
               <input type="file" accept="image/*" onchange="handlePhotoUpload(event)" class="hidden">
             </label>
-            <button type="button" onclick="openCameraCapture(handlePhotoUpload, document.getElementById('photo-camera-file'))" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold" title="Take a photo with your device camera">
+            <button type="button" onclick="document.getElementById('photo-camera-file').click()" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold" title="Take a photo with your device camera">
               <i class="fa-solid fa-camera" aria-hidden="true"></i> Camera
             </button>
             <input id="photo-camera-file" type="file" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)" class="hidden">
@@ -186,7 +186,6 @@
   <!-- Modular Scripts -->
   <script src="./js/state.js"></script>
   <script src="./js/compositor.js"></script>
-  <script src="./js/cameraCapture.js"></script>
   <script src="./js/backgroundRemoval.js"></script>
   <script src="./js/canvasRenderer.js"></script>
 </body>
