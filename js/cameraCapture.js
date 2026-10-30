@@ -33,7 +33,8 @@ function openCameraCapture(onCapture, fallbackInput) {
 function isMobileCameraDevice() {
   return navigator.userAgentData?.mobile === true
     || /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    || (navigator.maxTouchPoints > 0 && window.matchMedia?.('(pointer: coarse)').matches);
 }
 
 function ensureCameraCaptureDialog() {
@@ -62,7 +63,6 @@ function ensureCameraCaptureDialog() {
   document.body.appendChild(cameraCaptureDialog);
   cameraCaptureVideo = document.getElementById('camera-capture-video');
   cameraCaptureStatus = document.getElementById('camera-capture-status');
-  cameraCaptureVideo.style.transform = 'scaleX(-1)';
   document.getElementById('camera-capture-button').addEventListener('click', captureDevicePhoto);
   document.getElementById('camera-close-button').addEventListener('click', closeCameraCapture);
   document.getElementById('camera-fallback-button').addEventListener('click', () => {
@@ -123,8 +123,6 @@ async function captureDevicePhoto() {
     return;
   }
 
-  context.translate(canvas.width, 0);
-  context.scale(-1, 1);
   context.drawImage(cameraCaptureVideo, 0, 0, canvas.width, canvas.height);
   const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
   if (!blob) {
