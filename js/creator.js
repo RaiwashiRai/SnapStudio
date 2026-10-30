@@ -1,6 +1,10 @@
 let creatorFrameImage = null;
 let creatorFrameImageDataUrl = null;
 let creatorPreviewPhoto = null;
+let creatorPreviewPhotoSource = null;
+let creatorBackgroundRemovedPhoto = null;
+let creatorBackgroundRemovedPhotoUrl = null;
+let creatorPhotoUploadToken = 0;
 let creatorCanvas, creatorCtx;
 
 window.onload = function() {
@@ -82,17 +86,82 @@ function handleCreatorPhotoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
+  const uploadToken = ++creatorPhotoUploadToken;
+  cancelImageBackgroundRemoval();
   const reader = new FileReader();
   reader.onload = event => {
+    if (uploadToken !== creatorPhotoUploadToken) return;
+    const imageSource = event.target.result;
     const img = new Image();
     img.onload = () => {
+      if (uploadToken !== creatorPhotoUploadToken) return;
       creatorPreviewPhoto = img;
+      creatorPreviewPhotoSource = imageSource;
+      clearCreatorBackgroundRemovedPhoto();
       redrawCreatorCanvas();
+      if (document.getElementById('background-removal-toggle')?.checked) {
+        startCreatorBackgroundRemoval();
+      }
     };
     img.onerror = () => showToast('Unable to load preview photo');
-    img.src = event.target.result;
+    img.src = imageSource;
   };
+  reader.onerror = () => showToast('Unable to read preview photo');
   reader.readAsDataURL(file);
+}
+
+function clearCreatorBackgroundRemovedPhoto() {
+  if (creatorBackgroundRemovedPhotoUrl) URL.revokeObjectURL(creatorBackgroundRemovedPhotoUrl);
+  creatorBackgroundRemovedPhoto = null;
+  creatorBackgroundRemovedPhotoUrl = null;
+}
+
+function startCreatorBackgroundRemoval() {
+  if (!creatorPreviewPhotoSource) return;
+  const uploadToken = creatorPhotoUploadToken;
+  const model = document.getElementById('background-model-selector').value;
+
+  processImageBackgroundRemoval(creatorPreviewPhotoSource, model, blob => {
+    const imageUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      if (uploadToken !== creatorPhotoUploadToken || !document.getElementById('background-removal-toggle').checked) {
+        URL.revokeObjectURL(imageUrl);
+        return;
+      }
+      clearCreatorBackgroundRemovedPhoto();
+      creatorBackgroundRemovedPhoto = img;
+      creatorBackgroundRemovedPhotoUrl = imageUrl;
+      setBackgroundRemovalStatus('Background removed');
+      redrawCreatorCanvas();
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(imageUrl);
+      showToast('Unable to load processed preview photo');
+    };
+    img.src = imageUrl;
+  }, () => {
+    clearCreatorBackgroundRemovedPhoto();
+    document.getElementById('background-removal-toggle').checked = false;
+    redrawCreatorCanvas();
+    showToast('Background removal failed. Showing original photo.');
+  });
+}
+
+function handleBackgroundRemovalToggle(enabled) {
+  cancelImageBackgroundRemoval();
+  if (enabled) {
+    startCreatorBackgroundRemoval();
+    return;
+  }
+  clearCreatorBackgroundRemovedPhoto();
+  redrawCreatorCanvas();
+}
+
+function handleBackgroundModelChange() {
+  if (document.getElementById('background-removal-toggle').checked) {
+    startCreatorBackgroundRemoval();
+  }
 }
 
 function getCreatorMask() {
@@ -121,6 +190,7 @@ function redrawCreatorCanvas() {
     template: Number(document.getElementById('creator-template-z').value),
     text: Number(document.getElementById('creator-text-z').value)
   };
+  const photo = creatorBackgroundRemovedPhoto || creatorPreviewPhoto;
 
   if (!creatorFrameImage && !creatorPreviewPhoto) {
     creatorCtx.fillStyle = '#1e293b';
@@ -135,16 +205,16 @@ function redrawCreatorCanvas() {
     {
       zIndex: layerZ.photo,
       draw: () => {
-        if (!creatorPreviewPhoto) return;
-        const fitScale = Math.min(W / creatorPreviewPhoto.width, H / creatorPreviewPhoto.height);
-        const drawWidth = creatorPreviewPhoto.width * fitScale;
-        const drawHeight = creatorPreviewPhoto.height * fitScale;
+        if (!photo) return;
+        const fitScale = Math.min(W / photo.width, H / photo.height);
+        const drawWidth = photo.width * fitScale;
+        const drawHeight = photo.height * fitScale;
         const anchorX = W * Number(document.getElementById('anchor-x').value) / 100;
         const anchorY = H * Number(document.getElementById('anchor-y').value) / 100;
         drawMaskedPhotoLayer(creatorCtx, {
           width: W,
           height: H,
-          image: creatorPreviewPhoto,
+          image: photo,
           x: anchorX,
           y: anchorY,
           drawWidth,

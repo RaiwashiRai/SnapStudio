@@ -1,4 +1,8 @@
 let userCapturedImage = null;
+let uploadedPhotoSource = null;
+let backgroundRemovedPhoto = null;
+let backgroundRemovedPhotoUrl = null;
+let photoUploadToken = 0;
 let activePresetFrameImg = null;
 
 let photoX = 400;
@@ -142,16 +146,82 @@ function handlePhotoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
+  const uploadToken = ++photoUploadToken;
+  cancelImageBackgroundRemoval();
   const reader = new FileReader();
   reader.onload = (event) => {
+    if (uploadToken !== photoUploadToken) return;
+    const imageSource = event.target.result;
     const img = new Image();
     img.onload = () => {
+      if (uploadToken !== photoUploadToken) return;
       userCapturedImage = img;
+      uploadedPhotoSource = imageSource;
+      clearBackgroundRemovedPhoto();
       resetPhotoPlacement();
+      if (document.getElementById('background-removal-toggle')?.checked) {
+        startPhotoBackgroundRemoval();
+      }
     };
-    img.src = event.target.result;
+    img.onerror = () => showToast('Unable to load photo');
+    img.src = imageSource;
   };
+  reader.onerror = () => showToast('Unable to read photo');
   reader.readAsDataURL(file);
+}
+
+function clearBackgroundRemovedPhoto() {
+  if (backgroundRemovedPhotoUrl) URL.revokeObjectURL(backgroundRemovedPhotoUrl);
+  backgroundRemovedPhoto = null;
+  backgroundRemovedPhotoUrl = null;
+}
+
+function startPhotoBackgroundRemoval() {
+  if (!uploadedPhotoSource) return;
+  const uploadToken = photoUploadToken;
+  const model = document.getElementById('background-model-selector').value;
+
+  processImageBackgroundRemoval(uploadedPhotoSource, model, blob => {
+    const imageUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      if (uploadToken !== photoUploadToken || !document.getElementById('background-removal-toggle').checked) {
+        URL.revokeObjectURL(imageUrl);
+        return;
+      }
+      clearBackgroundRemovedPhoto();
+      backgroundRemovedPhoto = img;
+      backgroundRemovedPhotoUrl = imageUrl;
+      setBackgroundRemovalStatus('Background removed');
+      redrawEditorCanvas();
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(imageUrl);
+      showToast('Unable to load processed photo');
+    };
+    img.src = imageUrl;
+  }, () => {
+    clearBackgroundRemovedPhoto();
+    document.getElementById('background-removal-toggle').checked = false;
+    redrawEditorCanvas();
+    showToast('Background removal failed. Showing original photo.');
+  });
+}
+
+function handleBackgroundRemovalToggle(enabled) {
+  cancelImageBackgroundRemoval();
+  if (enabled) {
+    startPhotoBackgroundRemoval();
+    return;
+  }
+  clearBackgroundRemovedPhoto();
+  redrawEditorCanvas();
+}
+
+function handleBackgroundModelChange() {
+  if (document.getElementById('background-removal-toggle').checked) {
+    startPhotoBackgroundRemoval();
+  }
 }
 
 function resetPhotoPlacement() {
@@ -265,14 +335,15 @@ function redrawEditorCanvas() {
     {
       zIndex: layerZ.photo,
       draw: () => {
-        if (!userCapturedImage) return;
-        const fitScale = Math.min(W / userCapturedImage.width, H / userCapturedImage.height);
-        const drawW = userCapturedImage.width * fitScale * photoScale;
-        const drawH = userCapturedImage.height * fitScale * photoScale;
+        const photo = backgroundRemovedPhoto || userCapturedImage;
+        if (!photo) return;
+        const fitScale = Math.min(W / photo.width, H / photo.height);
+        const drawW = photo.width * fitScale * photoScale;
+        const drawH = photo.height * fitScale * photoScale;
         drawMaskedPhotoLayer(editorCtx, {
           width: W,
           height: H,
-          image: userCapturedImage,
+          image: photo,
           x: photoX,
           y: photoY,
           drawWidth: drawW,

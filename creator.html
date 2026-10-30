@@ -64,6 +64,19 @@
           <div class="space-y-1.5 border-b border-slate-800 pb-3">
             <label class="font-bold text-slate-200 block">Preview Photo (not saved)</label>
             <input type="file" id="input-creator-photo" accept="image/*" onchange="handleCreatorPhotoUpload(event)" class="w-full text-slate-400 text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-800 file:text-slate-300 font-semibold cursor-pointer">
+            <label class="flex items-center gap-2 text-slate-300">
+              <input id="background-removal-toggle" type="checkbox" checked onchange="handleBackgroundRemovalToggle(this.checked)">
+              Remove background
+            </label>
+            <label for="background-model-selector" class="block text-slate-400">Model</label>
+            <select id="background-model-selector" onchange="handleBackgroundModelChange()" class="w-full px-2 py-1.5 rounded bg-slate-950 border border-slate-800 text-slate-200">
+              <option value="isnet_fp16">Balanced</option>
+              <option value="isnet">High compatibility</option>
+              <option value="isnet_quint8">Smaller download</option>
+            </select>
+            <p id="background-removal-status" class="hidden text-[11px] text-slate-400" role="status" aria-live="polite">
+              <i class="fa-solid fa-spinner fa-spin mr-1" aria-hidden="true"></i><span id="background-removal-status-text"></span>
+            </p>
           </div>
 
           <div class="space-y-1.5 border-b border-slate-800 pb-3">
@@ -209,6 +222,7 @@
 
   <script src="./js/state.js"></script>
   <script src="./js/compositor.js"></script>
+  <script src="./js/backgroundRemoval.js"></script>
   <script src="./js/creator.js"></script>
 </body>
 </html>

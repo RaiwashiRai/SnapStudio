@@ -56,6 +56,19 @@
               <i class="fa-solid fa-upload"></i> Choose Photo
               <input type="file" accept="image/*" onchange="handlePhotoUpload(event)" class="hidden">
             </label>
+            <label class="flex items-center gap-2 text-slate-300">
+              <input id="background-removal-toggle" type="checkbox" checked onchange="handleBackgroundRemovalToggle(this.checked)">
+              Remove background
+            </label>
+            <label for="background-model-selector" class="block text-slate-400">Model</label>
+            <select id="background-model-selector" onchange="handleBackgroundModelChange()" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="isnet_fp16">Balanced</option>
+              <option value="isnet">High compatibility</option>
+              <option value="isnet_quint8">Smaller download</option>
+            </select>
+            <p id="background-removal-status" class="hidden text-[11px] text-slate-400" role="status" aria-live="polite">
+              <i class="fa-solid fa-spinner fa-spin mr-1" aria-hidden="true"></i><span id="background-removal-status-text"></span>
+            </p>
           </div>
 
           <!-- STEP 2: Select Preset -->
@@ -146,6 +159,7 @@
   <!-- Modular Scripts -->
   <script src="./js/state.js"></script>
   <script src="./js/compositor.js"></script>
+  <script src="./js/backgroundRemoval.js"></script>
   <script src="./js/canvasRenderer.js"></script>
 </body>
 </html>
