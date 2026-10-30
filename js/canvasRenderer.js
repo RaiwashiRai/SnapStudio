@@ -1,9 +1,14 @@
 let userCapturedImage = null;
+let uploadedPhotoSource = null;
+let backgroundRemovedPhoto = null;
+let backgroundRemovedPhotoUrl = null;
+let photoUploadToken = 0;
 let activePresetFrameImg = null;
 
 let photoX = 400;
 let photoY = 400;
 let photoScale = 1.0;
+let photoRotation = 0;
 
 let isDragging = false;
 let dragStartX = 0;
@@ -16,6 +21,7 @@ let activePinch = null;
 
 let editorCanvas, editorCtx;
 let presetLoadToken = 0;
+let editorTextEnabled = true;
 
 window.addEventListener('DOMContentLoaded', async () => {
   editorCanvas = document.getElementById('editor-canvas');
@@ -26,8 +32,18 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   try {
     await loadPresetsFromFiles();
+    const transferredPreset = sessionStorage.getItem('snapstudio-preset-for-editor');
+    if (transferredPreset) {
+      sessionStorage.removeItem('snapstudio-preset-for-editor');
+      try {
+        addEditorPreset(JSON.parse(transferredPreset));
+      } catch (error) {
+        console.error('Unable to load transferred preset:', error);
+        showToast('Unable to read the creator preset. Check its JSON and try again.');
+      }
+    }
     populatePresetDropdown();
-    applySelectedPreset(presets[0].id);
+    applySelectedPreset(activePreset?.id || presets[0].id);
   } catch (error) {
     console.error('Failed to load presets:', error);
     const dropdown = document.getElementById('preset-selector');
@@ -38,6 +54,41 @@ window.addEventListener('DOMContentLoaded', async () => {
     showToast('Unable to load presets. Serve the app over HTTP and check presets/manifest.json.');
   }
 });
+
+function addEditorPreset(preset) {
+  if (!preset || typeof preset !== 'object' || Array.isArray(preset) || typeof preset.id !== 'string' || !preset.id.trim()) {
+    throw new Error('Preset must be an object with a non-empty id.');
+  }
+  if (preset.frameImageUrl !== undefined && typeof preset.frameImageUrl !== 'string') {
+    throw new Error('Preset frameImageUrl must be a string.');
+  }
+
+  const existingIndex = presets.findIndex(item => item.id === preset.id);
+  if (existingIndex >= 0) presets.splice(existingIndex, 1);
+  presets.push(preset);
+  activePreset = preset;
+}
+
+async function handlePresetJsonUpload(event) {
+  const input = event.target;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    const preset = JSON.parse(await file.text());
+    addEditorPreset(preset);
+    populatePresetDropdown();
+    applySelectedPreset(preset.id);
+    showToast(`Loaded preset: ${preset.title || preset.id}`);
+  } catch (error) {
+    console.error('Unable to load preset JSON:', error);
+    showToast(error instanceof SyntaxError
+      ? 'Preset file is not valid JSON.'
+      : `Unable to load preset: ${error.message}`);
+  } finally {
+    input.value = '';
+  }
+}
 
 function populatePresetDropdown() {
   const dropdown = document.getElementById('preset-selector');
@@ -64,6 +115,7 @@ function applySelectedPreset(presetId) {
 
   const selector = document.getElementById('preset-selector');
   if (selector) selector.value = activePreset.id;
+  updateEditorTextControls();
   activePresetFrameImg = null;
   setEditorCanvasSize(800, 800);
 
@@ -119,6 +171,29 @@ function getEditorLayerZ() {
   };
 }
 
+function updateEditorTextControls() {
+  const controls = document.getElementById('editor-text-controls');
+  const toggle = document.getElementById('editor-text-enabled');
+  editorTextEnabled = activePreset?.textEnabled !== false;
+  if (toggle) toggle.checked = editorTextEnabled;
+  if (controls) {
+    controls.hidden = !editorTextEnabled;
+    controls.classList.toggle('hidden', !editorTextEnabled);
+  }
+}
+
+function handleEditorTextToggle(enabled) {
+  editorTextEnabled = enabled;
+  const toggle = document.getElementById('editor-text-enabled');
+  if (toggle) toggle.checked = enabled;
+  const controls = document.getElementById('editor-text-controls');
+  if (controls) {
+    controls.hidden = !enabled;
+    controls.classList.toggle('hidden', !enabled);
+  }
+  redrawEditorCanvas();
+}
+
 function resetPhotoAnchor() {
   if (!editorCanvas || !activePreset) return;
   photoX = editorCanvas.width * Number(activePreset.anchorXPercent ?? 50) / 100;
@@ -142,26 +217,96 @@ function handlePhotoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
+  const uploadToken = ++photoUploadToken;
+  cancelImageBackgroundRemoval();
   const reader = new FileReader();
   reader.onload = (event) => {
+    if (uploadToken !== photoUploadToken) return;
+    const imageSource = event.target.result;
     const img = new Image();
     img.onload = () => {
+      if (uploadToken !== photoUploadToken) return;
       userCapturedImage = img;
+      uploadedPhotoSource = imageSource;
+      clearBackgroundRemovedPhoto();
       resetPhotoPlacement();
+      if (document.getElementById('background-removal-toggle')?.checked) {
+        startPhotoBackgroundRemoval();
+      }
     };
-    img.src = event.target.result;
+    img.onerror = () => showToast('Unable to load photo');
+    img.src = imageSource;
   };
+  reader.onerror = () => showToast('Unable to read photo');
   reader.readAsDataURL(file);
+}
+
+function clearBackgroundRemovedPhoto() {
+  if (backgroundRemovedPhotoUrl) URL.revokeObjectURL(backgroundRemovedPhotoUrl);
+  backgroundRemovedPhoto = null;
+  backgroundRemovedPhotoUrl = null;
+}
+
+function startPhotoBackgroundRemoval() {
+  if (!uploadedPhotoSource) return;
+  const uploadToken = photoUploadToken;
+  const model = document.getElementById('background-model-selector').value;
+
+  processImageBackgroundRemoval(uploadedPhotoSource, model, blob => {
+    const imageUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      if (uploadToken !== photoUploadToken || !document.getElementById('background-removal-toggle').checked) {
+        URL.revokeObjectURL(imageUrl);
+        return;
+      }
+      clearBackgroundRemovedPhoto();
+      backgroundRemovedPhoto = img;
+      backgroundRemovedPhotoUrl = imageUrl;
+      setBackgroundRemovalStatus('Background removed', 'success');
+      redrawEditorCanvas();
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(imageUrl);
+      showToast('Unable to load processed photo');
+    };
+    img.src = imageUrl;
+  }, (_error, message) => {
+    clearBackgroundRemovedPhoto();
+    document.getElementById('background-removal-toggle').checked = false;
+    redrawEditorCanvas();
+    showToast(`${message} Original photo kept.`);
+  });
+}
+
+function handleBackgroundRemovalToggle(enabled) {
+  cancelImageBackgroundRemoval();
+  if (enabled) {
+    startPhotoBackgroundRemoval();
+    return;
+  }
+  clearBackgroundRemovedPhoto();
+  redrawEditorCanvas();
+}
+
+function handleBackgroundModelChange() {
+  if (document.getElementById('background-removal-toggle').checked) {
+    startPhotoBackgroundRemoval();
+  }
 }
 
 function resetPhotoPlacement() {
   if (!editorCanvas) return;
   resetPhotoAnchor();
   photoScale = 1.0;
+  photoRotation = 0;
   setPhotoPanMode(false);
 
   const scaleSlider = document.getElementById('slider-photo-scale');
   if (scaleSlider) scaleSlider.value = 1.0;
+  const rotationSlider = document.getElementById('slider-photo-rotation');
+  if (rotationSlider) rotationSlider.value = 0;
+  updatePhotoRotationDisplay();
 
   redrawEditorCanvas();
   showToast('Image loaded to Canvas Stage');
@@ -169,6 +314,25 @@ function resetPhotoPlacement() {
 
 function updatePhotoScale(val) {
   setPhotoScale(parseFloat(val));
+  redrawEditorCanvas();
+}
+
+function updatePhotoRotation(val) {
+  photoRotation = Math.min(180, Math.max(-180, parseFloat(val)));
+  updatePhotoRotationDisplay();
+  redrawEditorCanvas();
+}
+
+function updatePhotoRotationDisplay() {
+  const rotationValue = document.getElementById('photo-rotation-value');
+  if (rotationValue) rotationValue.textContent = `${photoRotation}°`;
+}
+
+function resetPhotoRotation() {
+  photoRotation = 0;
+  const rotationSlider = document.getElementById('slider-photo-rotation');
+  if (rotationSlider) rotationSlider.value = 0;
+  updatePhotoRotationDisplay();
   redrawEditorCanvas();
 }
 
@@ -265,19 +429,20 @@ function redrawEditorCanvas() {
     {
       zIndex: layerZ.photo,
       draw: () => {
-        if (!userCapturedImage) return;
-        const fitScale = Math.min(W / userCapturedImage.width, H / userCapturedImage.height);
-        const drawW = userCapturedImage.width * fitScale * photoScale;
-        const drawH = userCapturedImage.height * fitScale * photoScale;
+        const photo = backgroundRemovedPhoto || userCapturedImage;
+        if (!photo) return;
+        const fitScale = Math.min(W / photo.width, H / photo.height);
+        const drawW = photo.width * fitScale * photoScale;
+        const drawH = photo.height * fitScale * photoScale;
         drawMaskedPhotoLayer(editorCtx, {
           width: W,
           height: H,
-          image: userCapturedImage,
+          image: photo,
           x: photoX,
           y: photoY,
           drawWidth: drawW,
           drawHeight: drawH,
-          rotation: 0,
+          rotation: photoRotation,
           maskAnchorX: W * Number(activePreset.anchorXPercent ?? 50) / 100,
           maskAnchorY: H * Number(activePreset.anchorYPercent ?? 45) / 100,
           masks: activePreset.masks || []
@@ -294,6 +459,7 @@ function redrawEditorCanvas() {
     {
       zIndex: layerZ.text,
       draw: () => {
+        if (!editorTextEnabled) return;
         editorCtx.save();
         editorCtx.fillStyle = textColor;
         editorCtx.font = `${fontWeight} ${fontSize}px "${fontFamily}", sans-serif`;

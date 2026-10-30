@@ -41,7 +41,7 @@
       
       <div class="text-center space-y-1">
         <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Framed Photo Booth Stage</h1>
-        <p class="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">Load a photo, adjust its zoom and position, customize the text, and download a PNG.</p>
+        <p class="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">Load a photo, adjust its zoom, rotation and position, customize the text, and download a PNG.</p>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -56,15 +56,49 @@
               <i class="fa-solid fa-upload"></i> Choose Photo
               <input type="file" accept="image/*" onchange="handlePhotoUpload(event)" class="hidden">
             </label>
+            <button type="button" onclick="document.getElementById('photo-camera-file').click()" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold" title="Take a photo with your device camera">
+              <i class="fa-solid fa-camera" aria-hidden="true"></i> Camera
+            </button>
+            <input id="photo-camera-file" type="file" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)" class="hidden">
+            <label class="flex items-center gap-2 text-slate-300">
+              <input id="background-removal-toggle" type="checkbox" checked onchange="handleBackgroundRemovalToggle(this.checked)">
+              Remove background
+            </label>
+            <p class="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-2 text-[11px] leading-relaxed text-indigo-100">
+              <i class="fa-solid fa-circle-info mr-1 text-indigo-300" aria-hidden="true"></i>
+              <strong>For best background removal:</strong> use a sharp, well-lit photo with one clearly visible subject against a plain, evenly lit background. Avoid clutter, shadows, and background colors similar to the subject.
+            </p>
+            <label for="background-model-selector" class="block text-slate-400">Model</label>
+            <select id="background-model-selector" onchange="handleBackgroundModelChange()" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="isnet_fp16">Balanced</option>
+              <option value="isnet">High compatibility</option>
+              <option value="isnet_quint8">Smaller download</option>
+            </select>
+            <p class="rounded-lg border border-slate-700 bg-slate-950/70 p-2 text-[10px] leading-relaxed text-slate-400">
+              The selected AI model downloads the first time you use it (typically 40–80 MB). Your browser may cache it for reuse; clearing browser data can require another download. Your photo stays on this device.
+            </p>
+            <div id="background-removal-status" class="hidden rounded-lg border border-indigo-400/40 bg-indigo-950/70 p-3 text-xs text-indigo-100 shadow-lg shadow-indigo-950/30" role="status" aria-live="polite">
+              <div class="flex items-start gap-2">
+                <i id="background-removal-status-icon" class="fa-solid fa-spinner fa-spin mt-0.5 text-indigo-300" aria-hidden="true"></i>
+                <span id="background-removal-status-text" class="font-semibold"></span>
+              </div>
+              <div id="background-removal-progress-track" class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800" role="progressbar" aria-label="Background remover loading progress" aria-valuemin="0" aria-valuemax="100">
+                <div id="background-removal-progress-bar" class="h-full w-0 rounded-full bg-indigo-400 transition-all duration-300"></div>
+              </div>
+            </div>
           </div>
 
           <!-- STEP 2: Select Preset -->
           <div class="space-y-2 border-b border-slate-800 pb-3">
             <label class="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Choose a preset</label>
             <select id="preset-selector" onchange="applySelectedPreset(this.value)" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"></select>
+            <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-[11px] cursor-pointer">
+              <i class="fa-solid fa-file-import" aria-hidden="true"></i> Load preset JSON
+              <input id="preset-json-input" type="file" accept=".json,application/json" onchange="handlePresetJsonUpload(event)" class="hidden">
+            </label>
           </div>
 
-          <!-- STEP 3: Photo Scale & Pan -->
+          <!-- STEP 3: Photo Scale, Rotation & Pan -->
           <div class="space-y-2 border-b border-slate-800 pb-3">
             <label class="font-bold text-slate-300 uppercase tracking-wider block text-[11px]">Adjust photo</label>
             <div class="text-[11px]">
@@ -76,29 +110,44 @@
               </div>
               <input type="range" id="slider-photo-scale" min="0.2" max="3.5" step="0.05" value="1" oninput="updatePhotoScale(this.value)" class="w-full">
             </div>
+            <div class="text-[11px]">
+              <div class="flex items-center justify-between">
+                <label for="slider-photo-rotation" class="text-slate-400">Rotation <span id="photo-rotation-value">0°</span></label>
+                <button type="button" onclick="resetPhotoRotation()" class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white" title="Reset rotation" aria-label="Reset rotation">
+                  <i class="fa-solid fa-rotate-left mr-1"></i>Reset
+                </button>
+              </div>
+              <input type="range" id="slider-photo-rotation" min="-180" max="180" step="1" value="0" oninput="updatePhotoRotation(this.value)" class="w-full">
+            </div>
           </div>
 
           <!-- STEP 4: Custom Typography -->
-          <div class="space-y-2">
-            <label class="font-bold text-slate-300 uppercase tracking-wider block text-[11px]">Customize text</label>
-            <input type="text" id="input-editor-text" value="ALEX RIVERA" placeholder="Enter custom text..." oninput="redrawEditorCanvas()" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500">
-            <div class="grid grid-cols-3 gap-2 text-[10px]">
-              <div>
-                <span class="text-slate-400">Text X %</span>
-                <input type="range" id="slider-text-x" min="0" max="100" value="50" oninput="redrawEditorCanvas()" class="w-full">
+          <div id="editor-text-section" class="space-y-2">
+            <label class="font-bold text-slate-300 uppercase tracking-wider block text-[11px]">Typography</label>
+            <label class="flex items-center gap-2 text-slate-300">
+              <input id="editor-text-enabled" type="checkbox" checked onchange="handleEditorTextToggle(this.checked)">
+              Enable typography
+            </label>
+            <div id="editor-text-controls" class="space-y-2">
+              <input type="text" id="input-editor-text" value="ALEX RIVERA" placeholder="Enter custom text..." oninput="redrawEditorCanvas()" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500">
+              <div class="grid grid-cols-3 gap-2 text-[10px]">
+                <div>
+                  <span class="text-slate-400">Text X %</span>
+                  <input type="range" id="slider-text-x" min="0" max="100" value="50" oninput="redrawEditorCanvas()" class="w-full">
+                </div>
+                <div>
+                  <span class="text-slate-400">Text Y %</span>
+                  <input type="range" id="slider-text-y" min="0" max="100" value="88" oninput="redrawEditorCanvas()" class="w-full">
+                </div>
+                <div>
+                  <span class="text-slate-400">Size (px)</span>
+                  <input type="range" id="slider-font-size" min="12" max="80" step="1" value="32" oninput="redrawEditorCanvas()" class="w-full">
+                </div>
               </div>
-              <div>
-                <span class="text-slate-400">Text Y %</span>
-                <input type="range" id="slider-text-y" min="0" max="100" value="88" oninput="redrawEditorCanvas()" class="w-full">
+              <div class="flex items-center justify-between text-[11px] pt-1">
+                <span class="text-slate-400">Text Color</span>
+                <input type="color" id="picker-text-color" value="#ffffff" onchange="redrawEditorCanvas()" class="w-7 h-7 rounded bg-transparent cursor-pointer">
               </div>
-              <div>
-                <span class="text-slate-400">Size (px)</span>
-                <input type="range" id="slider-font-size" min="12" max="80" step="1" value="32" oninput="redrawEditorCanvas()" class="w-full">
-              </div>
-            </div>
-            <div class="flex items-center justify-between text-[11px] pt-1">
-              <span class="text-slate-400">Text Color</span>
-              <input type="color" id="picker-text-color" value="#ffffff" onchange="redrawEditorCanvas()" class="w-7 h-7 rounded bg-transparent cursor-pointer">
             </div>
           </div>
         </div>
@@ -146,6 +195,7 @@
   <!-- Modular Scripts -->
   <script src="./js/state.js"></script>
   <script src="./js/compositor.js"></script>
-  <script src="./js/canvasRenderer.js"></script>
+  <script src="./js/backgroundRemoval.js"></script>
+  <script src="./js/canvasRenderer.js?v=2"></script>
 </body>
 </html>
