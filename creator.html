@@ -64,10 +64,10 @@
           <div class="space-y-1.5 border-b border-slate-800 pb-3">
             <label class="font-bold text-slate-200 block">Preview Photo (not saved)</label>
             <input type="file" id="input-creator-photo" accept="image/*" onchange="handleCreatorPhotoUpload(event)" class="w-full text-slate-400 text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-800 file:text-slate-300 font-semibold cursor-pointer">
-            <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold cursor-pointer" title="Take a photo with your device camera">
+            <button type="button" onclick="openCameraCapture(handleCreatorPhotoUpload, document.getElementById('creator-photo-camera-file'))" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold" title="Take a photo with your device camera">
               <i class="fa-solid fa-camera" aria-hidden="true"></i> Camera
-              <input type="file" accept="image/*" capture="environment" onchange="handleCreatorPhotoUpload(event)" class="hidden">
-            </label>
+            </button>
+            <input id="creator-photo-camera-file" type="file" accept="image/*" capture="environment" onchange="handleCreatorPhotoUpload(event)" class="hidden">
             <label class="flex items-center gap-2 text-slate-300">
               <input id="background-removal-toggle" type="checkbox" checked onchange="handleBackgroundRemovalToggle(this.checked)">
               Remove background
@@ -242,6 +242,7 @@
 
   <script src="./js/state.js"></script>
   <script src="./js/compositor.js"></script>
+  <script src="./js/cameraCapture.js"></script>
   <script src="./js/backgroundRemoval.js"></script>
   <script src="./js/creator.js"></script>
 </body>
