@@ -5,6 +5,7 @@ let creatorPreviewPhotoSource = null;
 let creatorBackgroundRemovedPhoto = null;
 let creatorBackgroundRemovedPhotoUrl = null;
 let creatorPhotoUploadToken = 0;
+let creatorFrameUploadToken = 0;
 let creatorCanvas, creatorCtx;
 
 window.onload = function() {
@@ -15,7 +16,97 @@ window.onload = function() {
     syncAllCreatorInputs();
     redrawCreatorCanvas();
   }
+  restoreCreatorDraft();
 };
+
+window.addEventListener('pagehide', saveCreatorDraft);
+
+function getCreatorDraft() {
+  const controls = Array.from(document.querySelectorAll('input, select, textarea'))
+    .filter(control => control.id && control.type !== 'file')
+    .map(control => ({
+      id: control.id,
+      value: control.value,
+      checked: control.type === 'checkbox' ? control.checked : undefined
+    }));
+
+  return {
+    controls,
+    frameImageDataUrl: creatorFrameImageDataUrl,
+    previewPhotoSource: creatorPreviewPhotoSource
+  };
+}
+
+function saveCreatorDraft() {
+  try {
+    sessionStorage.setItem('snapstudio-creator-draft', JSON.stringify(getCreatorDraft()));
+    return true;
+  } catch (error) {
+    console.error('Unable to save creator draft:', error);
+    return false;
+  }
+}
+
+function restoreCreatorDraft() {
+  const savedDraft = sessionStorage.getItem('snapstudio-creator-draft');
+  if (!savedDraft) return;
+
+  let draft;
+  try {
+    draft = JSON.parse(savedDraft);
+  } catch (error) {
+    console.error('Unable to read creator draft:', error);
+    sessionStorage.removeItem('snapstudio-creator-draft');
+    showToast('Saved creator state could not be restored.');
+    return;
+  }
+  if (!draft || typeof draft !== 'object') return;
+
+  if (Array.isArray(draft.controls)) {
+    draft.controls.forEach(({ id, value, checked }) => {
+      const control = document.getElementById(id);
+      if (!control || control.type === 'file') return;
+      control.value = value;
+      if (control.type === 'checkbox' && typeof checked === 'boolean') {
+        control.checked = checked;
+      }
+    });
+  }
+  syncAllCreatorInputs();
+  handleCreatorTextToggle(document.getElementById('creator-text-enabled').checked);
+
+  if (typeof draft.frameImageDataUrl === 'string' && draft.frameImageDataUrl) {
+    const uploadToken = creatorFrameUploadToken;
+    const img = new Image();
+    img.onload = () => {
+      if (uploadToken !== creatorFrameUploadToken) return;
+      creatorFrameImage = img;
+      creatorFrameImageDataUrl = draft.frameImageDataUrl;
+      creatorCanvas.width = img.naturalWidth || img.width;
+      creatorCanvas.height = img.naturalHeight || img.height;
+      syncCreatorCanvasToTemplateSize();
+      redrawCreatorCanvas();
+    };
+    img.onerror = () => showToast('Unable to restore saved template artwork.');
+    img.src = draft.frameImageDataUrl;
+  }
+
+  if (typeof draft.previewPhotoSource === 'string' && draft.previewPhotoSource) {
+    const uploadToken = creatorPhotoUploadToken;
+    const img = new Image();
+    img.onload = () => {
+      if (uploadToken !== creatorPhotoUploadToken) return;
+      creatorPreviewPhoto = img;
+      creatorPreviewPhotoSource = draft.previewPhotoSource;
+      redrawCreatorCanvas();
+      if (document.getElementById('background-removal-toggle').checked) {
+        startCreatorBackgroundRemoval();
+      }
+    };
+    img.onerror = () => showToast('Unable to restore saved preview photo.');
+    img.src = draft.previewPhotoSource;
+  }
+}
 
 function syncCreatorCanvasToTemplateSize() {
   const viewport = document.getElementById('creator-stage-viewport');
@@ -56,8 +147,10 @@ function handleCreatorFrameUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
+  const uploadToken = ++creatorFrameUploadToken;
   const reader = new FileReader();
   reader.onload = (event) => {
+    if (uploadToken !== creatorFrameUploadToken) return;
     const imageDataUrl = event.target.result;
     if (typeof imageDataUrl !== 'string') {
       showToast('Unable to read template image');
@@ -66,6 +159,7 @@ function handleCreatorFrameUpload(e) {
 
     const img = new Image();
     img.onload = () => {
+      if (uploadToken !== creatorFrameUploadToken) return;
       creatorFrameImage = img;
       creatorFrameImageDataUrl = imageDataUrl;
       if (creatorCanvas) {
@@ -132,7 +226,7 @@ function startCreatorBackgroundRemoval() {
       clearCreatorBackgroundRemovedPhoto();
       creatorBackgroundRemovedPhoto = img;
       creatorBackgroundRemovedPhotoUrl = imageUrl;
-      setBackgroundRemovalStatus('Background removed');
+      setBackgroundRemovalStatus('Background removed', 'success');
       redrawCreatorCanvas();
     };
     img.onerror = () => {
@@ -140,11 +234,11 @@ function startCreatorBackgroundRemoval() {
       showToast('Unable to load processed preview photo');
     };
     img.src = imageUrl;
-  }, () => {
+  }, (_error, message) => {
     clearCreatorBackgroundRemovedPhoto();
     document.getElementById('background-removal-toggle').checked = false;
     redrawCreatorCanvas();
-    showToast('Background removal failed. Showing original photo.');
+    showToast(`${message} Original photo kept.`);
   });
 }
 
@@ -162,6 +256,15 @@ function handleBackgroundModelChange() {
   if (document.getElementById('background-removal-toggle').checked) {
     startCreatorBackgroundRemoval();
   }
+}
+
+function handleCreatorTextToggle(enabled) {
+  const controls = document.getElementById('creator-typography-controls');
+  if (controls) {
+    controls.hidden = !enabled;
+    controls.classList.toggle('hidden', !enabled);
+  }
+  redrawCreatorCanvas();
 }
 
 function getCreatorMask() {
@@ -234,7 +337,11 @@ function redrawCreatorCanvas() {
     },
     {
       zIndex: layerZ.text,
-      draw: () => drawCreatorText(W, H)
+      draw: () => {
+        if (document.getElementById('creator-text-enabled').checked) {
+          drawCreatorText(W, H);
+        }
+      }
     }
   ]);
 
@@ -318,6 +425,7 @@ function generateCreatorPresetObject() {
     frameColor: '#3b82f6',
     textColor: document.getElementById('preset-text-color').value,
     defaultText: document.getElementById('preset-default-text').value,
+    textEnabled: document.getElementById('creator-text-enabled').checked,
     fontFamily: document.getElementById('creator-font-family').value,
     fontWeight: document.getElementById('creator-font-weight').value,
     textXPercent: parseInt(document.getElementById('text-x-percent').value),
@@ -343,4 +451,58 @@ function exportCreatorPresetJSON() {
   a.download = `${newPreset.id}-preset.json`;
   a.click();
   showToast('Exported preset JSON file');
+}
+
+function useCreatorPresetInEditor() {
+  if (!saveCreatorDraft()) {
+    showToast('Unable to save creator state. Clear some browser storage and try again.');
+    return;
+  }
+
+  try {
+    sessionStorage.setItem('snapstudio-preset-for-editor', JSON.stringify(generateCreatorPresetObject()));
+  } catch (error) {
+    console.error('Unable to transfer preset to editor:', error);
+    showToast('Unable to save this preset for the editor. The template image may be too large.');
+    return;
+  }
+
+  window.location.href = './index.html';
+}
+
+function clearCreatorState() {
+  creatorFrameUploadToken += 1;
+  creatorPhotoUploadToken += 1;
+  cancelImageBackgroundRemoval();
+  clearCreatorBackgroundRemovedPhoto();
+  creatorFrameImage = null;
+  creatorFrameImageDataUrl = null;
+  creatorPreviewPhoto = null;
+  creatorPreviewPhotoSource = null;
+
+  document.querySelectorAll('input, select, textarea').forEach(control => {
+    if (control.type === 'file') {
+      control.value = '';
+    } else if (control.type === 'checkbox') {
+      control.checked = control.defaultChecked;
+    } else if (control.tagName === 'SELECT') {
+      control.selectedIndex = Array.from(control.options).findIndex(option => option.defaultSelected);
+      if (control.selectedIndex < 0) control.selectedIndex = 0;
+    } else {
+      control.value = control.defaultValue;
+    }
+  });
+
+  if (creatorCanvas) {
+    creatorCanvas.width = 800;
+    creatorCanvas.height = 800;
+  }
+  syncCreatorCanvasToTemplateSize();
+  syncAllCreatorInputs();
+  handleCreatorTextToggle(document.getElementById('creator-text-enabled').checked);
+  sessionStorage.removeItem('snapstudio-creator-draft');
+  sessionStorage.removeItem('snapstudio-preset-for-editor');
+  setBackgroundRemovalStatus('');
+  redrawCreatorCanvas();
+  showToast('Creator cleared.');
 }

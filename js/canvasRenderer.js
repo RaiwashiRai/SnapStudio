@@ -30,8 +30,18 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   try {
     await loadPresetsFromFiles();
+    const transferredPreset = sessionStorage.getItem('snapstudio-preset-for-editor');
+    if (transferredPreset) {
+      sessionStorage.removeItem('snapstudio-preset-for-editor');
+      try {
+        addEditorPreset(JSON.parse(transferredPreset));
+      } catch (error) {
+        console.error('Unable to load transferred preset:', error);
+        showToast('Unable to read the creator preset. Check its JSON and try again.');
+      }
+    }
     populatePresetDropdown();
-    applySelectedPreset(presets[0].id);
+    applySelectedPreset(activePreset?.id || presets[0].id);
   } catch (error) {
     console.error('Failed to load presets:', error);
     const dropdown = document.getElementById('preset-selector');
@@ -42,6 +52,41 @@ window.addEventListener('DOMContentLoaded', async () => {
     showToast('Unable to load presets. Serve the app over HTTP and check presets/manifest.json.');
   }
 });
+
+function addEditorPreset(preset) {
+  if (!preset || typeof preset !== 'object' || Array.isArray(preset) || typeof preset.id !== 'string' || !preset.id.trim()) {
+    throw new Error('Preset must be an object with a non-empty id.');
+  }
+  if (preset.frameImageUrl !== undefined && typeof preset.frameImageUrl !== 'string') {
+    throw new Error('Preset frameImageUrl must be a string.');
+  }
+
+  const existingIndex = presets.findIndex(item => item.id === preset.id);
+  if (existingIndex >= 0) presets.splice(existingIndex, 1);
+  presets.push(preset);
+  activePreset = preset;
+}
+
+async function handlePresetJsonUpload(event) {
+  const input = event.target;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    const preset = JSON.parse(await file.text());
+    addEditorPreset(preset);
+    populatePresetDropdown();
+    applySelectedPreset(preset.id);
+    showToast(`Loaded preset: ${preset.title || preset.id}`);
+  } catch (error) {
+    console.error('Unable to load preset JSON:', error);
+    showToast(error instanceof SyntaxError
+      ? 'Preset file is not valid JSON.'
+      : `Unable to load preset: ${error.message}`);
+  } finally {
+    input.value = '';
+  }
+}
 
 function populatePresetDropdown() {
   const dropdown = document.getElementById('preset-selector');
@@ -68,6 +113,7 @@ function applySelectedPreset(presetId) {
 
   const selector = document.getElementById('preset-selector');
   if (selector) selector.value = activePreset.id;
+  updateEditorTextControls();
   activePresetFrameImg = null;
   setEditorCanvasSize(800, 800);
 
@@ -121,6 +167,14 @@ function getEditorLayerZ() {
     template: Number(activePreset.zIndex?.template ?? 2),
     text: Number(activePreset.zIndex?.text ?? 3)
   };
+}
+
+function updateEditorTextControls() {
+  const controls = document.getElementById('editor-text-controls');
+  if (!controls) return;
+  const enabled = activePreset?.textEnabled !== false;
+  controls.hidden = !enabled;
+  controls.classList.toggle('hidden', !enabled);
 }
 
 function resetPhotoAnchor() {
@@ -192,7 +246,7 @@ function startPhotoBackgroundRemoval() {
       clearBackgroundRemovedPhoto();
       backgroundRemovedPhoto = img;
       backgroundRemovedPhotoUrl = imageUrl;
-      setBackgroundRemovalStatus('Background removed');
+      setBackgroundRemovalStatus('Background removed', 'success');
       redrawEditorCanvas();
     };
     img.onerror = () => {
@@ -200,11 +254,11 @@ function startPhotoBackgroundRemoval() {
       showToast('Unable to load processed photo');
     };
     img.src = imageUrl;
-  }, () => {
+  }, (_error, message) => {
     clearBackgroundRemovedPhoto();
     document.getElementById('background-removal-toggle').checked = false;
     redrawEditorCanvas();
-    showToast('Background removal failed. Showing original photo.');
+    showToast(`${message} Original photo kept.`);
   });
 }
 
@@ -365,6 +419,7 @@ function redrawEditorCanvas() {
     {
       zIndex: layerZ.text,
       draw: () => {
+        if (activePreset.textEnabled === false) return;
         editorCtx.save();
         editorCtx.fillStyle = textColor;
         editorCtx.font = `${fontWeight} ${fontSize}px "${fontFamily}", sans-serif`;

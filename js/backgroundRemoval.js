@@ -3,21 +3,33 @@ let backgroundRemovalRequestId = 0;
 
 async function removeImageBackground(imageSource, model, onProgress) {
   if (!backgroundRemovalModulePromise) {
-    backgroundRemovalModulePromise = import('https://esm.sh/@imgly/background-removal@1.5.8?bundle');
+    backgroundRemovalModulePromise = import('https://esm.sh/@imgly/background-removal@1.5.8?bundle')
+      .catch(error => {
+        backgroundRemovalModulePromise = null;
+        throw error;
+      });
   }
 
-  const { default: removeBackground } = await backgroundRemovalModulePromise;
+  const { removeBackground } = await backgroundRemovalModulePromise;
   return removeBackground(imageSource, {
     model,
     progress: (key, current, total) => onProgress(key, current, total)
   });
 }
 
-function setBackgroundRemovalStatus(message) {
+function setBackgroundRemovalStatus(message, state = 'loading') {
   const status = document.getElementById('background-removal-status');
   const statusText = document.getElementById('background-removal-status-text');
   if (!status || !statusText) return;
 
+  const icon = document.getElementById('background-removal-status-icon');
+  if (icon) {
+    icon.className = state === 'error'
+      ? 'fa-solid fa-circle-exclamation mr-1 text-amber-400'
+      : state === 'success'
+        ? 'fa-solid fa-circle-check mr-1 text-emerald-400'
+        : 'fa-solid fa-spinner fa-spin mr-1';
+  }
   statusText.textContent = message;
   status.hidden = !message;
   status.classList.toggle('hidden', !message);
@@ -38,8 +50,11 @@ async function processImageBackgroundRemoval(imageSource, model, onComplete, onE
   } catch (error) {
     if (requestId !== backgroundRemovalRequestId) return;
     console.error('Background removal failed:', error);
-    setBackgroundRemovalStatus('');
-    onError(error);
+    const message = error instanceof TypeError
+      ? 'Could not load the background-removal model. Check your internet connection and try again.'
+      : `Background removal failed${error instanceof Error && error.message ? `: ${error.message}` : '.'}`;
+    setBackgroundRemovalStatus(message, 'error');
+    onError(error, message);
   }
 }
 

@@ -64,10 +64,18 @@
           <div class="space-y-1.5 border-b border-slate-800 pb-3">
             <label class="font-bold text-slate-200 block">Preview Photo (not saved)</label>
             <input type="file" id="input-creator-photo" accept="image/*" onchange="handleCreatorPhotoUpload(event)" class="w-full text-slate-400 text-xs file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:bg-slate-800 file:text-slate-300 font-semibold cursor-pointer">
+            <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold cursor-pointer" title="Take a photo with your device camera">
+              <i class="fa-solid fa-camera" aria-hidden="true"></i> Camera
+              <input type="file" accept="image/*" capture="environment" onchange="handleCreatorPhotoUpload(event)" class="hidden">
+            </label>
             <label class="flex items-center gap-2 text-slate-300">
               <input id="background-removal-toggle" type="checkbox" checked onchange="handleBackgroundRemovalToggle(this.checked)">
               Remove background
             </label>
+            <p class="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-2 text-[11px] leading-relaxed text-indigo-100">
+              <i class="fa-solid fa-circle-info mr-1 text-indigo-300" aria-hidden="true"></i>
+              <strong>For best background removal:</strong> use a sharp, well-lit photo with one clearly visible subject against a plain, evenly lit background. Avoid clutter, shadows, and background colors similar to the subject.
+            </p>
             <label for="background-model-selector" class="block text-slate-400">Model</label>
             <select id="background-model-selector" onchange="handleBackgroundModelChange()" class="w-full px-2 py-1.5 rounded bg-slate-950 border border-slate-800 text-slate-200">
               <option value="isnet_fp16">Balanced</option>
@@ -75,7 +83,7 @@
               <option value="isnet_quint8">Smaller download</option>
             </select>
             <p id="background-removal-status" class="hidden text-[11px] text-slate-400" role="status" aria-live="polite">
-              <i class="fa-solid fa-spinner fa-spin mr-1" aria-hidden="true"></i><span id="background-removal-status-text"></span>
+              <i id="background-removal-status-icon" class="fa-solid fa-spinner fa-spin mr-1" aria-hidden="true"></i><span id="background-removal-status-text"></span>
             </p>
           </div>
 
@@ -133,6 +141,11 @@
           <!-- Typography -->
           <div class="space-y-3 border-b border-slate-800 pb-3">
             <span class="font-bold text-purple-400 block">4. Default Typography</span>
+            <label class="flex items-center gap-2 text-slate-300">
+              <input id="creator-text-enabled" type="checkbox" checked onchange="handleCreatorTextToggle(this.checked)">
+              Include text in this preset
+            </label>
+            <div id="creator-typography-controls" class="space-y-3">
             <input type="text" id="preset-default-text" value="GUEST NAME" oninput="redrawCreatorCanvas()" class="w-full px-2.5 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100">
             
             <div class="grid grid-cols-2 gap-2">
@@ -198,11 +211,18 @@
               <span class="text-slate-400">Text Color</span>
               <input type="color" id="preset-text-color" value="#ffffff" onchange="redrawCreatorCanvas()" class="w-7 h-7 rounded bg-transparent cursor-pointer">
             </div>
+            </div>
           </div>
 
           <div class="space-y-2 pt-1">
+            <button type="button" onclick="useCreatorPresetInEditor()" class="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Save &amp; Test in Editor
+            </button>
             <button onclick="exportCreatorPresetJSON()" class="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition flex items-center justify-center gap-2">
               <i class="fa-solid fa-file-code"></i> Export Preset JSON File
+            </button>
+            <button type="button" onclick="clearCreatorState()" class="w-full py-2 rounded-xl border border-rose-900/70 bg-rose-950/40 hover:bg-rose-900/50 text-rose-200 font-semibold transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-trash-can" aria-hidden="true"></i> Clear Creator
             </button>
           </div>
 
