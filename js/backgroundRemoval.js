@@ -22,6 +22,16 @@ function setBackgroundRemovalStatus(message, state = 'loading') {
   const statusText = document.getElementById('background-removal-status-text');
   if (!status || !statusText) return;
 
+  const progressBar = document.getElementById('background-removal-progress-bar');
+  const progressTrack = document.getElementById('background-removal-progress-track');
+  const progressMatch = message.match(/(\d{1,3})%/);
+  const progress = progressMatch ? Math.min(100, Number(progressMatch[1])) : 0;
+  if (progressBar) progressBar.style.width = `${progress}%`;
+  if (progressTrack) {
+    progressTrack.setAttribute('aria-valuenow', String(progress));
+    progressTrack.hidden = state !== 'error' && state !== 'success' && !progressMatch;
+  }
+
   const icon = document.getElementById('background-removal-status-icon');
   if (icon) {
     icon.className = state === 'error'

@@ -20,6 +20,7 @@ let activePinch = null;
 
 let editorCanvas, editorCtx;
 let presetLoadToken = 0;
+let editorTextEnabled = true;
 
 window.addEventListener('DOMContentLoaded', async () => {
   editorCanvas = document.getElementById('editor-canvas');
@@ -171,10 +172,25 @@ function getEditorLayerZ() {
 
 function updateEditorTextControls() {
   const controls = document.getElementById('editor-text-controls');
-  if (!controls) return;
-  const enabled = activePreset?.textEnabled !== false;
-  controls.hidden = !enabled;
-  controls.classList.toggle('hidden', !enabled);
+  const toggle = document.getElementById('editor-text-enabled');
+  editorTextEnabled = activePreset?.textEnabled !== false;
+  if (toggle) toggle.checked = editorTextEnabled;
+  if (controls) {
+    controls.hidden = !editorTextEnabled;
+    controls.classList.toggle('hidden', !editorTextEnabled);
+  }
+}
+
+function handleEditorTextToggle(enabled) {
+  editorTextEnabled = enabled;
+  const toggle = document.getElementById('editor-text-enabled');
+  if (toggle) toggle.checked = enabled;
+  const controls = document.getElementById('editor-text-controls');
+  if (controls) {
+    controls.hidden = !enabled;
+    controls.classList.toggle('hidden', !enabled);
+  }
+  redrawEditorCanvas();
 }
 
 function resetPhotoAnchor() {
@@ -419,7 +435,7 @@ function redrawEditorCanvas() {
     {
       zIndex: layerZ.text,
       draw: () => {
-        if (activePreset.textEnabled === false) return;
+        if (!editorTextEnabled) return;
         editorCtx.save();
         editorCtx.fillStyle = textColor;
         editorCtx.font = `${fontWeight} ${fontSize}px "${fontFamily}", sans-serif`;
