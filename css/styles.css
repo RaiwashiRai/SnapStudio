@@ -63,6 +63,10 @@ main { min-height: calc(100vh - 112px); }
 .export-actions .download-action:hover { border-color: #14b8a6; background: #115e59; }
 .editor-toolbar { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.45rem; border: 1px solid #334155; border-radius: 0.65rem; background: #0f172a; }
 .editor-toolbar button { display: inline-flex; min-width: 8rem; min-height: 2.55rem; align-items: center; justify-content: center; gap: 0.55rem; padding: 0 0.85rem; border: 1px solid transparent; border-radius: 0.45rem; background: transparent; color: #cbd5e1; font-size: 0.75rem; font-weight: 650; cursor: pointer; }
+.editor-tool-group { display: flex; min-width: 0; align-items: stretch; gap: 0.25rem; }
+.editor-tool-group > button:first-child { flex: 1 1 auto; }
+.editor-toolbar .tool-settings-button { min-width: 2.55rem; flex: 0 0 2.55rem; padding: 0 0.55rem; }
+#toolbar-rotation-value { min-width: 2.4rem; padding: 0.2rem 0.35rem; border-radius: 0.3rem; background: #0b1220; color: #a5b4fc; font-size: 0.68rem; font-variant-numeric: tabular-nums; text-align: center; }
 .editor-toolbar button:hover,
 .editor-toolbar button[aria-expanded="true"] { border-color: #475569; background: #1e293b; color: #f8fafc; }
 .editor-toolbar button[aria-expanded="true"] i { color: #a5b4fc; }

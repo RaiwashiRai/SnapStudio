@@ -254,9 +254,11 @@ function showSelectionWorkspace() {
   document.getElementById('editor-workspace').hidden = true;
   document.getElementById('setup-flow').hidden = false;
   document.querySelectorAll('.tool-popover').forEach(panel => { panel.hidden = true; });
-  document.querySelectorAll('.editor-toolbar button[aria-controls]').forEach(button => {
+  document.querySelectorAll('button[aria-controls]').forEach(button => {
     button.setAttribute('aria-expanded', 'false');
   });
+  setPhotoPanMode(false);
+  setPhotoRotateMode(false);
 }
 
 function showEditorWorkspace() {
@@ -295,14 +297,41 @@ function toggleEditorPanel(panelId) {
   const panel = document.getElementById(panelId);
   if (!panel) return;
   const shouldOpen = panel.hidden;
-  document.querySelectorAll('.tool-popover').forEach(item => { item.hidden = true; });
-  document.querySelectorAll('.editor-toolbar button[aria-controls]').forEach(button => {
+  document.querySelectorAll('.tool-popover').forEach(item => {
+    if (item !== panel && !item.hidden) disableEditorPanelMode(item.id);
+    item.hidden = true;
+  });
+  document.querySelectorAll('button[aria-controls]').forEach(button => {
     button.setAttribute('aria-expanded', 'false');
   });
-  if (!shouldOpen) return;
+  if (!shouldOpen) {
+    disableEditorPanelMode(panelId);
+    return;
+  }
   panel.hidden = false;
-  const button = document.querySelector(`.editor-toolbar button[aria-controls="${panelId}"]`);
+  const button = document.querySelector(`button[aria-controls="${panelId}"]`);
   if (button) button.setAttribute('aria-expanded', 'true');
+}
+
+function disableEditorPanelMode(panelId) {
+  if (panelId === 'pan-tools') setPhotoPanMode(false);
+  if (panelId === 'rotate-tools') setPhotoRotateMode(false);
+}
+
+function toggleEditorToolMode(panelId, mode) {
+  if (!userCapturedImage) {
+    showToast('Load a photo first');
+    return;
+  }
+  const isEnabled = mode === 'pan' ? isPhotoPanModeEnabled : isPhotoRotateModeEnabled;
+  if (isEnabled) {
+    disableEditorPanelMode(panelId);
+    if (!document.getElementById(panelId).hidden) toggleEditorPanel(panelId);
+    return;
+  }
+  if (document.getElementById(panelId).hidden) toggleEditorPanel(panelId);
+  if (mode === 'pan') setPhotoPanMode(true);
+  else setPhotoRotateMode(true);
 }
 
 function syncEditorCanvasViewport() {
@@ -520,13 +549,18 @@ function updatePhotoScale(val) {
 
 function updatePhotoRotation(val) {
   photoRotation = Math.min(180, Math.max(-180, parseFloat(val)));
+  const rotationSlider = document.getElementById('slider-photo-rotation');
+  if (rotationSlider) rotationSlider.value = photoRotation;
   updatePhotoRotationDisplay();
   redrawEditorCanvas();
 }
 
 function updatePhotoRotationDisplay() {
+  const value = `${Math.trunc(photoRotation)}°`;
   const rotationValue = document.getElementById('photo-rotation-value');
-  if (rotationValue) rotationValue.textContent = `${photoRotation}°`;
+  if (rotationValue) rotationValue.textContent = value;
+  const toolbarValue = document.getElementById('toolbar-rotation-value');
+  if (toolbarValue) toolbarValue.textContent = value;
 }
 
 function resetPhotoRotation() {
@@ -579,6 +613,12 @@ function setPhotoPanMode(enabled) {
     const label = toolbarButton.querySelector('span');
     if (label) label.textContent = enabled ? 'Pan & zoom on' : 'Pan & zoom';
   }
+  const detailsButton = document.getElementById('toggle-photo-pan');
+  if (detailsButton) {
+    detailsButton.setAttribute('aria-pressed', String(enabled));
+    const label = document.getElementById('photo-pan-button-label');
+    if (label) label.textContent = enabled ? 'Disable pan & zoom' : 'Enable pan & zoom';
+  }
 
   const status = document.getElementById('photo-pan-status');
   if (status) {
@@ -605,6 +645,19 @@ function setPhotoRotateMode(enabled) {
   if (button) button.setAttribute('aria-pressed', String(enabled));
   const label = document.getElementById('photo-rotate-button-label');
   if (label) label.textContent = enabled ? 'Disable drag to rotate' : 'Enable drag to rotate';
+  const toolbarButton = document.getElementById('tool-rotate-button');
+  if (toolbarButton) {
+    toolbarButton.setAttribute('aria-pressed', String(enabled));
+    toolbarButton.setAttribute('aria-label', enabled ? 'Disable drag to rotate' : 'Enable drag to rotate');
+  }
+  const toolbarIcon = document.getElementById('toolbar-rotate-icon');
+  if (toolbarIcon) toolbarIcon.className = enabled
+    ? 'fa-solid fa-rotate'
+    : 'fa-solid fa-arrows-rotate';
+  const detailsIcon = document.getElementById('photo-rotate-icon');
+  if (detailsIcon) detailsIcon.className = enabled
+    ? 'fa-solid fa-rotate'
+    : 'fa-solid fa-arrows-rotate';
 }
 
 function resetPhotoZoom() {
