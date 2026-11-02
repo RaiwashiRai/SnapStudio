@@ -123,6 +123,9 @@ input[type=range] {
 }
 
 @media (max-width: 700px) {
+  .site-header-inner { flex-wrap: wrap; gap: 0.75rem; }
+  .site-navigation { width: 100%; justify-content: stretch; }
+  .site-navigation a { flex: 1 1 0; padding-right: 0.5rem; padding-left: 0.5rem; text-align: center; white-space: nowrap; }
   .setup-grid { grid-template-columns: minmax(0, 1fr); gap: 0.9rem; }
   .setup-heading { padding-top: 0.5rem; }
   .setup-heading h1 { font-size: 1.5rem; }
