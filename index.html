@@ -36,149 +36,125 @@
   </header>
 
   <!-- MAIN CONTAINER -->
-  <main class="flex-grow flex items-center justify-center p-3 sm:p-6">
-    <section class="w-full max-w-5xl space-y-6">
-      
-      <div class="text-center space-y-1">
-        <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Framed Photo Booth Stage</h1>
-        <p class="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">Load a photo, adjust its zoom, rotation and position, customize the text, and download a PNG.</p>
+  <main class="flex-grow w-full px-4 py-6 sm:px-6">
+    <section id="setup-flow" class="setup-flow mx-auto w-full max-w-6xl space-y-7">
+      <header class="setup-heading">
+        <p class="eyebrow">SnapStudio / New creation</p>
+        <h1>Build your photo</h1>
+        <p>Start with a photo, then choose the frame that fits.</p>
+      </header>
+
+      <div class="setup-grid">
+        <section class="setup-section" aria-labelledby="photo-step-title">
+          <div class="setup-section-heading">
+            <span class="step-number">01</span>
+            <div><h2 id="photo-step-title">Add your photo</h2><p>Take one now or choose an image from your device.</p></div>
+          </div>
+          <div id="photo-upload-actions" class="photo-upload-actions">
+            <button type="button" class="capture-button" onclick="document.getElementById('photo-camera-file').click()">
+              <i class="fa-solid fa-camera" aria-hidden="true"></i><span>Use camera</span>
+            </button>
+            <label class="upload-button">
+              <i class="fa-solid fa-arrow-up-from-bracket" aria-hidden="true"></i><span>Upload photo</span>
+              <input id="photo-upload-file" type="file" accept="image/*" onchange="handlePhotoUpload(event)" class="sr-only">
+            </label>
+            <input id="photo-camera-file" type="file" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)" class="sr-only">
+          </div>
+          <div id="selected-photo-preview" class="selected-photo-preview" hidden>
+            <img id="selected-photo-thumbnail" alt="Selected photo preview">
+            <div class="selected-photo-copy"><strong>Photo ready</strong><span>Your image stays on this device.</span></div>
+            <button type="button" class="icon-action remove-photo-button" onclick="removeSelectedPhoto()" title="Remove selected photo" aria-label="Remove selected photo"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+          </div>
+        </section>
+
+        <section class="setup-section templates-section" aria-labelledby="template-step-title">
+          <div class="setup-section-heading">
+            <span class="step-number">02</span>
+            <div><h2 id="template-step-title">Choose a template</h2><p>Select a frame to preview your composition.</p></div>
+          </div>
+          <div id="preset-templates" class="preset-templates" aria-label="Available photo templates"></div>
+          <label class="import-preset-button">
+            <i class="fa-solid fa-file-import" aria-hidden="true"></i> Import preset JSON
+            <input id="preset-json-input" type="file" accept=".json,application/json" onchange="handlePresetJsonUpload(event)" class="sr-only">
+          </label>
+        </section>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        <!-- Photo configuration -->
-        <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl text-xs">
-          <h2 class="font-bold text-slate-200 uppercase tracking-wider text-[11px]">1. Configure your photo</h2>
-          
-          <!-- STEP 1: Image Upload -->
-          <div class="space-y-2 border-b border-slate-800 pb-3">
-            <label class="font-bold text-slate-300 uppercase tracking-wider block text-[11px]">Upload photo</label>
-            <label class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 transition flex items-center justify-center gap-2 cursor-pointer text-center">
-              <i class="fa-solid fa-upload"></i> Choose Photo
-              <input type="file" accept="image/*" onchange="handlePhotoUpload(event)" class="hidden">
-            </label>
-            <button type="button" onclick="document.getElementById('photo-camera-file').click()" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold" title="Take a photo with your device camera">
-              <i class="fa-solid fa-camera" aria-hidden="true"></i> Camera
-            </button>
-            <input id="photo-camera-file" type="file" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)" class="hidden">
-            <label class="flex items-center gap-2 text-slate-300">
-              <input id="background-removal-toggle" type="checkbox" checked onchange="handleBackgroundRemovalToggle(this.checked)">
-              Remove background
-            </label>
-            <p class="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-2 text-[11px] leading-relaxed text-indigo-100">
-              <i class="fa-solid fa-circle-info mr-1 text-indigo-300" aria-hidden="true"></i>
-              <strong>For best background removal:</strong> use a sharp, well-lit photo with one clearly visible subject against a plain, evenly lit background. Avoid clutter, shadows, and background colors similar to the subject.
-            </p>
-            <label for="background-model-selector" class="block text-slate-400">Model</label>
-            <select id="background-model-selector" onchange="handleBackgroundModelChange()" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500">
-              <option value="isnet_fp16">Balanced</option>
-              <option value="isnet">High compatibility</option>
-              <option value="isnet_quint8">Smaller download</option>
-            </select>
-            <p class="rounded-lg border border-slate-700 bg-slate-950/70 p-2 text-[10px] leading-relaxed text-slate-400">
-              The selected AI model downloads the first time you use it (typically 40–80 MB). Your browser may cache it for reuse; clearing browser data can require another download. Your photo stays on this device.
-            </p>
-            <div id="background-removal-status" class="hidden rounded-lg border border-indigo-400/40 bg-indigo-950/70 p-3 text-xs text-indigo-100 shadow-lg shadow-indigo-950/30" role="status" aria-live="polite">
-              <div class="flex items-start gap-2">
-                <i id="background-removal-status-icon" class="fa-solid fa-spinner fa-spin mt-0.5 text-indigo-300" aria-hidden="true"></i>
-                <span id="background-removal-status-text" class="font-semibold"></span>
-              </div>
-              <div id="background-removal-progress-track" class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800" role="progressbar" aria-label="Background remover loading progress" aria-valuemin="0" aria-valuemax="100">
-                <div id="background-removal-progress-bar" class="h-full w-0 rounded-full bg-indigo-400 transition-all duration-300"></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- STEP 2: Select Preset -->
-          <div class="space-y-2 border-b border-slate-800 pb-3">
-            <label class="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Choose a preset</label>
-            <select id="preset-selector" onchange="applySelectedPreset(this.value)" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 focus:outline-none focus:border-indigo-500"></select>
-            <label class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-[11px] cursor-pointer">
-              <i class="fa-solid fa-file-import" aria-hidden="true"></i> Load preset JSON
-              <input id="preset-json-input" type="file" accept=".json,application/json" onchange="handlePresetJsonUpload(event)" class="hidden">
-            </label>
-          </div>
-
-          <!-- STEP 3: Photo Scale, Rotation & Pan -->
-          <div class="space-y-2 border-b border-slate-800 pb-3">
-            <label class="font-bold text-slate-300 uppercase tracking-wider block text-[11px]">Adjust photo</label>
-            <div class="text-[11px]">
-              <div class="flex items-center justify-between">
-                <span class="text-slate-400">Zoom Scale</span>
-                <button type="button" onclick="resetPhotoZoom()" class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white" title="Reset zoom" aria-label="Reset zoom">
-                  <i class="fa-solid fa-rotate-left mr-1"></i>Reset
-                </button>
-              </div>
-              <input type="range" id="slider-photo-scale" min="0.2" max="3.5" step="0.05" value="1" oninput="updatePhotoScale(this.value)" class="w-full">
-            </div>
-            <div class="text-[11px]">
-              <div class="flex items-center justify-between">
-                <label for="slider-photo-rotation" class="text-slate-400">Rotation <span id="photo-rotation-value">0°</span></label>
-                <button type="button" onclick="resetPhotoRotation()" class="px-2 py-1 rounded bg-slate-800 text-slate-300 hover:text-white" title="Reset rotation" aria-label="Reset rotation">
-                  <i class="fa-solid fa-rotate-left mr-1"></i>Reset
-                </button>
-              </div>
-              <input type="range" id="slider-photo-rotation" min="-180" max="180" step="1" value="0" oninput="updatePhotoRotation(this.value)" class="w-full">
-            </div>
-          </div>
-
-          <!-- STEP 4: Custom Typography -->
-          <div id="editor-text-section" class="space-y-2">
-            <label class="font-bold text-slate-300 uppercase tracking-wider block text-[11px]">Typography</label>
-            <label class="flex items-center gap-2 text-slate-300">
-              <input id="editor-text-enabled" type="checkbox" checked onchange="handleEditorTextToggle(this.checked)">
-              Enable typography
-            </label>
-            <div id="editor-text-controls" class="space-y-2">
-              <input type="text" id="input-editor-text" value="ALEX RIVERA" placeholder="Enter custom text..." oninput="redrawEditorCanvas()" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500">
-              <div class="grid grid-cols-3 gap-2 text-[10px]">
-                <div>
-                  <span class="text-slate-400">Text X %</span>
-                  <input type="range" id="slider-text-x" min="0" max="100" value="50" oninput="redrawEditorCanvas()" class="w-full">
-                </div>
-                <div>
-                  <span class="text-slate-400">Text Y %</span>
-                  <input type="range" id="slider-text-y" min="0" max="100" value="88" oninput="redrawEditorCanvas()" class="w-full">
-                </div>
-                <div>
-                  <span class="text-slate-400">Size (px)</span>
-                  <input type="range" id="slider-font-size" min="12" max="80" step="1" value="32" oninput="redrawEditorCanvas()" class="w-full">
-                </div>
-              </div>
-              <div class="flex items-center justify-between text-[11px] pt-1">
-                <span class="text-slate-400">Text Color</span>
-                <input type="color" id="picker-text-color" value="#ffffff" onchange="redrawEditorCanvas()" class="w-7 h-7 rounded bg-transparent cursor-pointer">
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Preview -->
-        <div class="lg:col-span-7 flex flex-col items-center gap-3">
-          <h2 class="w-full max-w-[460px] font-bold text-slate-200 uppercase tracking-wider text-[11px]">2. Preview</h2>
-          <div id="editor-stage-viewport" class="relative w-full max-w-[460px] rounded-2xl overflow-hidden border border-slate-800 checkerboard shadow-2xl">
-            <canvas id="editor-canvas" width="800" height="800" class="w-full h-full object-contain cursor-grab active:cursor-grabbing"></canvas>
-          </div>
-
-          <div class="touch-pan-controls w-full max-w-[460px] flex-col items-center gap-2">
-            <button type="button" id="toggle-photo-pan" onclick="togglePhotoPanMode()" aria-pressed="false" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition">
-              <i class="fa-solid fa-hand-pointer mr-1"></i><span id="photo-pan-button-label">Enable Pan &amp; Zoom</span>
-            </button>
-            <p id="photo-pan-status" role="status" aria-live="polite" class="text-[11px] text-slate-400 text-center">
-              Pan and zoom are off. Enable them to drag, scroll to zoom, or pinch to zoom.
-            </p>
-          </div>
-
-          <p id="stage-drag-hint" class="desktop-pan-hint text-[11px] text-slate-400 flex items-center gap-1.5">
-            <i class="fa-solid fa-hand-pointer text-indigo-400"></i> Enable pan and zoom to drag the photo or scroll to zoom
-          </p>
-        </div>
-      </div>
-
-      <div class="mx-auto w-full max-w-5xl space-y-2">
-        <button onclick="downloadCanvasComposite()" class="w-full px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-download"></i> Download PNG
+      <div class="setup-footer">
+        <p>Both a photo and a template are required to continue.</p>
+        <button id="start-editing-button" type="button" onclick="beginEditing()" disabled>
+          Continue to editor <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
         </button>
-        <p class="text-center text-[11px] text-slate-400">Your photo and edits stay in your browser. SnapStudio doesn’t upload photos or save an edit history.</p>
+      </div>
+    </section>
+
+    <section id="editor-workspace" class="editor-workspace mx-auto w-full max-w-6xl" hidden>
+      <header class="editor-topbar">
+        <div class="editor-title-group">
+          <button type="button" class="icon-action back-action" onclick="returnToSelection()" title="Back to photo and template selection" aria-label="Back to selection"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i></button>
+          <div><p class="eyebrow">SnapStudio / Editor</p><h1 id="editor-template-title">Your composition</h1></div>
+        </div>
+        <div class="export-actions">
+          <button type="button" onclick="shareCanvasComposite()" title="Share image" aria-label="Share image"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i><span>Share</span></button>
+          <button type="button" class="download-action" onclick="downloadCanvasComposite()" title="Download PNG"><i class="fa-solid fa-download" aria-hidden="true"></i><span>Download</span></button>
+        </div>
+      </header>
+
+      <nav class="editor-toolbar" aria-label="Editing tools">
+        <button id="tool-background-button" type="button" onclick="toggleEditorPanel('background-tools')" aria-expanded="false" aria-controls="background-tools"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i><span>Remove BG</span></button>
+        <button id="tool-pan-button" type="button" onclick="toggleEditorPanel('pan-tools')" aria-expanded="false" aria-controls="pan-tools"><i class="fa-solid fa-up-down-left-right" aria-hidden="true"></i><span>Pan &amp; zoom</span></button>
+        <button id="tool-rotate-button" type="button" onclick="toggleEditorPanel('rotate-tools')" aria-expanded="false" aria-controls="rotate-tools"><i class="fa-solid fa-rotate" aria-hidden="true"></i><span>Rotate</span></button>
+        <button id="tool-name-button" type="button" onclick="toggleEditorPanel('name-tools')" aria-expanded="false" aria-controls="name-tools"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Name</span></button>
+      </nav>
+
+      <div class="tool-popovers">
+        <section id="background-tools" class="tool-popover" hidden aria-label="Background removal settings">
+          <label class="tool-toggle"><input id="background-removal-toggle" type="checkbox" onchange="handleBackgroundRemovalToggle(this.checked)"><span>Remove background</span></label>
+          <label for="background-model-selector">Model</label>
+          <select id="background-model-selector" onchange="handleBackgroundModelChange()">
+            <option value="isnet_fp16">Balanced</option><option value="isnet">High compatibility</option><option value="isnet_quint8">Smaller download</option>
+          </select>
+          <p class="tool-note">The model downloads on first use (typically 40–80 MB). Your photo stays on this device.</p>
+          <div id="background-removal-status" class="background-status hidden" role="status" aria-live="polite">
+            <div><i id="background-removal-status-icon" class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span id="background-removal-status-text"></span></div>
+            <div id="background-removal-progress-track" class="progress-track" role="progressbar" aria-label="Background removal progress" aria-valuemin="0" aria-valuemax="100"><div id="background-removal-progress-bar"></div></div>
+          </div>
+        </section>
+
+        <section id="pan-tools" class="tool-popover" hidden aria-label="Pan and zoom settings">
+          <button type="button" id="toggle-photo-pan" onclick="togglePhotoPanMode()" aria-pressed="false"><i class="fa-solid fa-hand-pointer" aria-hidden="true"></i><span id="photo-pan-button-label">Enable pan &amp; zoom</span></button>
+          <label for="slider-photo-scale">Zoom <span id="photo-zoom-value">100%</span></label>
+          <input type="range" id="slider-photo-scale" min="0.2" max="3.5" step="0.05" value="1" oninput="updatePhotoScale(this.value)">
+          <button type="button" class="subtle-tool-button" onclick="resetPhotoZoom()"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reset zoom</button>
+          <p id="photo-pan-status" role="status" aria-live="polite">Pan and zoom are off. Enable to drag, scroll, or pinch.</p>
+        </section>
+
+        <section id="rotate-tools" class="tool-popover" hidden aria-label="Rotation settings">
+          <label for="slider-photo-rotation">Rotation <span id="photo-rotation-value">0°</span></label>
+          <input type="range" id="slider-photo-rotation" min="-180" max="180" step="1" value="0" oninput="updatePhotoRotation(this.value)">
+          <button type="button" class="subtle-tool-button" onclick="resetPhotoRotation()"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reset rotation</button>
+        </section>
+
+        <section id="name-tools" class="tool-popover" hidden aria-label="Name settings">
+          <label class="tool-toggle"><input id="editor-text-enabled" type="checkbox" checked onchange="handleEditorTextToggle(this.checked)"><span>Show name</span></label>
+          <div id="editor-text-controls" class="name-controls">
+            <label for="input-editor-text">Name on template</label>
+            <input type="text" id="input-editor-text" value="GUEST NAME" placeholder="Enter a name" oninput="redrawEditorCanvas()">
+            <div class="name-sliders">
+              <label>Horizontal<input type="range" id="slider-text-x" min="0" max="100" value="50" oninput="redrawEditorCanvas()"></label>
+              <label>Vertical<input type="range" id="slider-text-y" min="0" max="100" value="88" oninput="redrawEditorCanvas()"></label>
+              <label>Size<input type="range" id="slider-font-size" min="12" max="80" step="1" value="32" oninput="redrawEditorCanvas()"></label>
+              <label>Color<input type="color" id="picker-text-color" value="#ffffff" onchange="redrawEditorCanvas()"></label>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="editor-stage-area">
+        <div id="editor-stage-viewport" class="checkerboard">
+          <canvas id="editor-canvas" width="800" height="800" class="cursor-grab active:cursor-grabbing"></canvas>
+        </div>
+        <p class="stage-caption">Drag to position when Pan &amp; zoom is enabled. Edits stay in your browser.</p>
       </div>
     </section>
   </main>

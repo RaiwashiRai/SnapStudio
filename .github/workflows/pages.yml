@@ -3,7 +3,7 @@ name: Deploy GitHub Pages
 on:
   push:
     branches:
-      - feature/background-removal-model-selector
+      - reorganise-main-ui
   workflow_dispatch:
 
 permissions:

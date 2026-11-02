@@ -22,6 +22,8 @@ let activePinch = null;
 let editorCanvas, editorCtx;
 let presetLoadToken = 0;
 let editorTextEnabled = true;
+let selectedTemplateId = null;
+let selectedTemplatePromise = Promise.resolve(true);
 
 window.addEventListener('DOMContentLoaded', async () => {
   editorCanvas = document.getElementById('editor-canvas');
@@ -42,14 +44,13 @@ window.addEventListener('DOMContentLoaded', async () => {
         showToast('Unable to read the creator preset. Check its JSON and try again.');
       }
     }
-    populatePresetDropdown();
-    applySelectedPreset(activePreset?.id || presets[0].id);
+    renderPresetTemplates();
+    syncEditorCanvasViewport();
   } catch (error) {
     console.error('Failed to load presets:', error);
-    const dropdown = document.getElementById('preset-selector');
-    if (dropdown) {
-      dropdown.innerHTML = '<option value="">Unable to load presets</option>';
-      dropdown.disabled = true;
+    const templateList = document.getElementById('preset-templates');
+    if (templateList) {
+      templateList.textContent = 'Unable to load templates. Serve the app over HTTP and check presets/manifest.json.';
     }
     showToast('Unable to load presets. Serve the app over HTTP and check presets/manifest.json.');
   }
@@ -77,8 +78,8 @@ async function handlePresetJsonUpload(event) {
   try {
     const preset = JSON.parse(await file.text());
     addEditorPreset(preset);
-    populatePresetDropdown();
-    applySelectedPreset(preset.id);
+    renderPresetTemplates();
+    selectPresetTemplate(preset.id);
     showToast(`Loaded preset: ${preset.title || preset.id}`);
   } catch (error) {
     console.error('Unable to load preset JSON:', error);
@@ -90,31 +91,55 @@ async function handlePresetJsonUpload(event) {
   }
 }
 
-function populatePresetDropdown() {
-  const dropdown = document.getElementById('preset-selector');
-  if (!dropdown) return;
-  dropdown.innerHTML = '';
-  
-  presets.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = p.title || p.id;
-    dropdown.appendChild(opt);
-  });
+function renderPresetTemplates() {
+  const templateList = document.getElementById('preset-templates');
+  if (!templateList) return;
+  templateList.replaceChildren();
 
-  if (activePreset) {
-    dropdown.value = activePreset.id;
-  }
+  presets.forEach(p => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'template-choice';
+    button.setAttribute('aria-pressed', String(p.id === selectedTemplateId));
+    button.setAttribute('aria-label', `Select ${p.title || p.id}`);
+    button.addEventListener('click', () => selectPresetTemplate(p.id));
+
+    const preview = document.createElement('span');
+    preview.className = 'template-choice-preview checkerboard';
+    if (p.frameImageUrl) {
+      const image = document.createElement('img');
+      image.alt = '';
+      image.loading = 'lazy';
+      image.src = p.frameImageUrlCandidates?.[0] || p.frameImageUrl;
+      image.onerror = () => {
+        const nextUrl = p.frameImageUrlCandidates?.find(url => url !== image.src);
+        if (nextUrl) image.src = nextUrl;
+        else image.remove();
+      };
+      preview.appendChild(image);
+    } else {
+      preview.style.setProperty('--template-color', p.frameColor || '#64748b');
+      preview.classList.add('template-choice-fallback');
+    }
+
+    const title = document.createElement('span');
+    title.className = 'template-choice-title';
+    title.textContent = p.title || p.id;
+    button.append(preview, title);
+    templateList.appendChild(button);
+  });
 }
 
 function applySelectedPreset(presetId) {
   activePreset = presets.find(p => p.id === presetId);
-  if (!activePreset) return;
+  if (!activePreset) return Promise.resolve(false);
   const loadToken = ++presetLoadToken;
   const selectedPreset = activePreset;
 
-  const selector = document.getElementById('preset-selector');
-  if (selector) selector.value = activePreset.id;
+  const templateTitle = document.getElementById('editor-template-title');
+  if (templateTitle) templateTitle.textContent = activePreset.title || activePreset.id;
+  const nameTool = document.getElementById('tool-name-button');
+  if (nameTool) nameTool.hidden = activePreset.textEnabled === false;
   updateEditorTextControls();
   activePresetFrameImg = null;
   setEditorCanvasSize(800, 800);
@@ -135,32 +160,102 @@ function applySelectedPreset(presetId) {
     const frameImageUrls = activePreset.frameImageUrlCandidates || [activePreset.frameImageUrl];
     let imageUrlIndex = 0;
     const img = new Image();
-    img.onload = () => {
-      if (loadToken !== presetLoadToken) return;
-      activePresetFrameImg = img;
-      setEditorCanvasSize(img.naturalWidth || img.width, img.naturalHeight || img.height);
-      resetPhotoAnchor();
-      redrawEditorCanvas();
-    };
-    img.onerror = () => {
-      if (loadToken !== presetLoadToken) return;
-      imageUrlIndex += 1;
-      if (imageUrlIndex < frameImageUrls.length) {
-        img.src = frameImageUrls[imageUrlIndex];
-        return;
-      }
+    return new Promise(resolve => {
+      img.onload = () => {
+        if (loadToken !== presetLoadToken) return resolve(false);
+        activePresetFrameImg = img;
+        setEditorCanvasSize(img.naturalWidth || img.width, img.naturalHeight || img.height);
+        resetPhotoAnchor();
+        redrawEditorCanvas();
+        resolve(true);
+      };
+      img.onerror = () => {
+        if (loadToken !== presetLoadToken) return resolve(false);
+        imageUrlIndex += 1;
+        if (imageUrlIndex < frameImageUrls.length) {
+          img.src = frameImageUrls[imageUrlIndex];
+          return;
+        }
 
-      activePresetFrameImg = null;
-      redrawEditorCanvas();
-      console.error(`Unable to load template image for preset "${selectedPreset.id}":`, frameImageUrls);
-      showToast(`Unable to load template for ${selectedPreset.title || selectedPreset.id}`);
-    };
-    img.src = frameImageUrls[imageUrlIndex];
+        activePresetFrameImg = null;
+        redrawEditorCanvas();
+        console.error(`Unable to load template image for preset "${selectedPreset.id}":`, frameImageUrls);
+        showToast(`Unable to load template for ${selectedPreset.title || selectedPreset.id}`);
+        resolve(false);
+      };
+      img.src = frameImageUrls[imageUrlIndex];
+    });
   } else {
     activePresetFrameImg = null;
     resetPhotoAnchor();
     redrawEditorCanvas();
+    return Promise.resolve(true);
   }
+}
+
+function selectPresetTemplate(presetId) {
+  selectedTemplateId = presetId;
+  renderPresetTemplates();
+  selectedTemplatePromise = applySelectedPreset(presetId);
+  refreshSelectionState();
+}
+
+function refreshSelectionState() {
+  const confirmButton = document.getElementById('start-editing-button');
+  if (confirmButton) {
+    confirmButton.disabled = !(userCapturedImage && uploadedPhotoSource && selectedTemplateId);
+  }
+}
+
+async function beginEditing() {
+  if (!userCapturedImage || !uploadedPhotoSource) {
+    showToast('Upload or take a photo before continuing.');
+    document.getElementById('photo-upload-actions')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (!selectedTemplateId) {
+    showToast('Choose a template before continuing.');
+    document.getElementById('preset-templates')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  const selectedId = selectedTemplateId;
+  const templateReady = await selectedTemplatePromise;
+  if (!templateReady || selectedId !== selectedTemplateId) return;
+  document.getElementById('setup-flow').hidden = true;
+  document.getElementById('editor-workspace').hidden = false;
+  syncEditorCanvasViewport();
+  redrawEditorCanvas();
+}
+
+function returnToSelection() {
+  document.getElementById('editor-workspace').hidden = true;
+  document.getElementById('setup-flow').hidden = false;
+}
+
+function toggleEditorPanel(panelId) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  const shouldOpen = panel.hidden;
+  document.querySelectorAll('.tool-popover').forEach(item => { item.hidden = true; });
+  document.querySelectorAll('.editor-toolbar button[aria-controls]').forEach(button => {
+    button.setAttribute('aria-expanded', 'false');
+  });
+  if (!shouldOpen) return;
+  panel.hidden = false;
+  const button = document.querySelector(`.editor-toolbar button[aria-controls="${panelId}"]`);
+  if (button) button.setAttribute('aria-expanded', 'true');
+}
+
+function syncEditorCanvasViewport() {
+  if (!editorCanvas) return;
+  const stageViewport = document.getElementById('editor-stage-viewport');
+  if (!stageViewport) return;
+  const ratio = editorCanvas.width / editorCanvas.height;
+  const maxWidth = Math.min(stageViewport.parentElement.clientWidth || 900, 900);
+  const maxHeight = Math.min(window.innerHeight * 0.68, 760);
+  stageViewport.style.width = `${Math.max(1, Math.min(maxWidth, maxHeight * ratio))}px`;
+  stageViewport.style.aspectRatio = `${editorCanvas.width} / ${editorCanvas.height}`;
 }
 
 function getEditorLayerZ() {
@@ -201,13 +296,10 @@ function resetPhotoAnchor() {
 }
 
 function setEditorCanvasSize(width, height) {
-  const stageViewport = document.getElementById('editor-stage-viewport');
   if (editorCanvas) {
     editorCanvas.width = width;
     editorCanvas.height = height;
-    if (stageViewport) {
-      stageViewport.style.aspectRatio = `${width} / ${height}`;
-    }
+    syncEditorCanvasViewport();
   }
 
   redrawEditorCanvas();
@@ -228,8 +320,10 @@ function handlePhotoUpload(e) {
       if (uploadToken !== photoUploadToken) return;
       userCapturedImage = img;
       uploadedPhotoSource = imageSource;
+      updatePhotoSelectionPreview(imageSource);
       clearBackgroundRemovedPhoto();
       resetPhotoPlacement();
+      refreshSelectionState();
       if (document.getElementById('background-removal-toggle')?.checked) {
         startPhotoBackgroundRemoval();
       }
@@ -239,6 +333,33 @@ function handlePhotoUpload(e) {
   };
   reader.onerror = () => showToast('Unable to read photo');
   reader.readAsDataURL(file);
+}
+
+function updatePhotoSelectionPreview(imageSource) {
+  const preview = document.getElementById('selected-photo-preview');
+  const image = document.getElementById('selected-photo-thumbnail');
+  if (!preview || !image) return;
+  image.src = imageSource;
+  preview.hidden = false;
+  refreshSelectionState();
+}
+
+function removeSelectedPhoto() {
+  photoUploadToken += 1;
+  cancelImageBackgroundRemoval();
+  clearBackgroundRemovedPhoto();
+  userCapturedImage = null;
+  uploadedPhotoSource = null;
+  ['photo-upload-file', 'photo-camera-file'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+  const preview = document.getElementById('selected-photo-preview');
+  const image = document.getElementById('selected-photo-thumbnail');
+  if (image) image.removeAttribute('src');
+  if (preview) preview.hidden = true;
+  refreshSelectionState();
+  redrawEditorCanvas();
 }
 
 function clearBackgroundRemovedPhoto() {
@@ -346,6 +467,8 @@ function setPhotoScale(scale, anchor) {
   photoScale = nextScale;
   const scaleSlider = document.getElementById('slider-photo-scale');
   if (scaleSlider) scaleSlider.value = photoScale;
+  const zoomValue = document.getElementById('photo-zoom-value');
+  if (zoomValue) zoomValue.textContent = `${Math.round(photoScale * 100)}%`;
 }
 
 function togglePhotoPanMode() {
@@ -633,3 +756,28 @@ function downloadCanvasComposite() {
     showToast('Unable to download PNG. Please try again.');
   }
 }
+
+async function shareCanvasComposite() {
+  if (!userCapturedImage) {
+    showToast('Load a photo first');
+    return;
+  }
+
+  try {
+    const blob = await new Promise(resolve => editorCanvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Unable to encode the canvas as a PNG.');
+    const file = new File([blob], 'SnapStudio-creation.png', { type: 'image/png' });
+    if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+      await navigator.share({ files: [file], title: 'My SnapStudio creation' });
+      return;
+    }
+    showToast('Sharing is not available in this browser. Download the PNG instead.');
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      console.error('Unable to share the canvas:', error);
+      showToast('Unable to share this image. Try downloading the PNG.');
+    }
+  }
+}
+
+window.addEventListener('resize', syncEditorCanvasViewport);
