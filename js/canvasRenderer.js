@@ -9,6 +9,8 @@ let photoX = 400;
 let photoY = 400;
 let photoScale = 1.0;
 let photoRotation = 0;
+let isBackgroundRemovalEnabled = false;
+let skipEditorPopConfirmation = false;
 
 let isDragging = false;
 let dragStartX = 0;
@@ -16,6 +18,8 @@ let dragStartY = 0;
 let activePointerId = null;
 let activePointerType = null;
 let isPhotoPanModeEnabled = false;
+let isPhotoRotateModeEnabled = false;
+let activeRotateGesture = null;
 const activeTouchPointers = new Map();
 let activePinch = null;
 
@@ -26,6 +30,10 @@ let selectedTemplateId = null;
 let selectedTemplatePromise = Promise.resolve(true);
 
 window.addEventListener('DOMContentLoaded', async () => {
+  const setupUrl = new URL(window.location.href);
+  setupUrl.hash = '';
+  history.replaceState({ snapStudioView: 'selection' }, '', setupUrl);
+
   editorCanvas = document.getElementById('editor-canvas');
   if (editorCanvas) {
     editorCtx = editorCanvas.getContext('2d');
@@ -55,6 +63,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     showToast('Unable to load presets. Serve the app over HTTP and check presets/manifest.json.');
   }
 });
+
+window.addEventListener('popstate', handleEditorHistoryNavigation);
+window.addEventListener('beforeunload', confirmEditorExit);
 
 function addEditorPreset(preset) {
   if (!preset || typeof preset !== 'object' || Array.isArray(preset) || typeof preset.id !== 'string' || !preset.id.trim()) {
@@ -222,6 +233,7 @@ async function beginEditing() {
   const selectedId = selectedTemplateId;
   const templateReady = await selectedTemplatePromise;
   if (!templateReady || selectedId !== selectedTemplateId) return;
+  history.pushState({ snapStudioView: 'editor' }, '', `${window.location.pathname}${window.location.search}#editor`);
   document.getElementById('setup-flow').hidden = true;
   document.getElementById('editor-workspace').hidden = false;
   syncEditorCanvasViewport();
@@ -229,8 +241,54 @@ async function beginEditing() {
 }
 
 function returnToSelection() {
+  if (!window.confirm('Do you wish to leave the editor and return to photo selection?')) return;
+  if (history.state?.snapStudioView === 'editor') {
+    skipEditorPopConfirmation = true;
+    history.back();
+    return;
+  }
+  showSelectionWorkspace();
+}
+
+function showSelectionWorkspace() {
   document.getElementById('editor-workspace').hidden = true;
   document.getElementById('setup-flow').hidden = false;
+  document.querySelectorAll('.tool-popover').forEach(panel => { panel.hidden = true; });
+  document.querySelectorAll('.editor-toolbar button[aria-controls]').forEach(button => {
+    button.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function showEditorWorkspace() {
+  document.getElementById('setup-flow').hidden = true;
+  document.getElementById('editor-workspace').hidden = false;
+  syncEditorCanvasViewport();
+  redrawEditorCanvas();
+}
+
+function handleEditorHistoryNavigation(event) {
+  if (event.state?.snapStudioView === 'editor') {
+    showEditorWorkspace();
+    return;
+  }
+
+  const editorWorkspace = document.getElementById('editor-workspace');
+  if (editorWorkspace && !editorWorkspace.hidden && !skipEditorPopConfirmation) {
+    if (!window.confirm('Do you wish to leave the editor and return to photo selection?')) {
+      history.pushState({ snapStudioView: 'editor' }, '', `${window.location.pathname}${window.location.search}#editor`);
+      return;
+    }
+  }
+
+  skipEditorPopConfirmation = false;
+  showSelectionWorkspace();
+}
+
+function confirmEditorExit(event) {
+  const editorWorkspace = document.getElementById('editor-workspace');
+  if (!editorWorkspace || editorWorkspace.hidden) return;
+  event.preventDefault();
+  event.returnValue = '';
 }
 
 function toggleEditorPanel(panelId) {
@@ -324,7 +382,7 @@ function handlePhotoUpload(e) {
       clearBackgroundRemovedPhoto();
       resetPhotoPlacement();
       refreshSelectionState();
-      if (document.getElementById('background-removal-toggle')?.checked) {
+      if (isBackgroundRemovalEnabled) {
         startPhotoBackgroundRemoval();
       }
     };
@@ -377,7 +435,7 @@ function startPhotoBackgroundRemoval() {
     const imageUrl = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
-      if (uploadToken !== photoUploadToken || !document.getElementById('background-removal-toggle').checked) {
+      if (uploadToken !== photoUploadToken || !isBackgroundRemovalEnabled) {
         URL.revokeObjectURL(imageUrl);
         return;
       }
@@ -394,13 +452,16 @@ function startPhotoBackgroundRemoval() {
     img.src = imageUrl;
   }, (_error, message) => {
     clearBackgroundRemovedPhoto();
-    document.getElementById('background-removal-toggle').checked = false;
+    isBackgroundRemovalEnabled = false;
+    syncBackgroundRemovalButton();
     redrawEditorCanvas();
     showToast(`${message} Original photo kept.`);
   });
 }
 
 function handleBackgroundRemovalToggle(enabled) {
+  isBackgroundRemovalEnabled = enabled;
+  syncBackgroundRemovalButton();
   cancelImageBackgroundRemoval();
   if (enabled) {
     startPhotoBackgroundRemoval();
@@ -410,8 +471,26 @@ function handleBackgroundRemovalToggle(enabled) {
   redrawEditorCanvas();
 }
 
+function toggleBackgroundRemovalFromToolbar() {
+  const enabled = !isBackgroundRemovalEnabled;
+  if (enabled && !uploadedPhotoSource) {
+    showToast('Load a photo before removing its background.');
+    return;
+  }
+  handleBackgroundRemovalToggle(enabled);
+}
+
+function syncBackgroundRemovalButton() {
+  const button = document.getElementById('tool-background-button');
+  const icon = document.getElementById('background-removal-button-icon');
+  if (button) button.setAttribute('aria-pressed', String(isBackgroundRemovalEnabled));
+  if (icon) icon.className = isBackgroundRemovalEnabled
+    ? 'fa-solid fa-square-check'
+    : 'fa-regular fa-square';
+}
+
 function handleBackgroundModelChange() {
-  if (document.getElementById('background-removal-toggle').checked) {
+  if (isBackgroundRemovalEnabled) {
     startPhotoBackgroundRemoval();
   }
 }
@@ -422,6 +501,7 @@ function resetPhotoPlacement() {
   photoScale = 1.0;
   photoRotation = 0;
   setPhotoPanMode(false);
+  setPhotoRotateMode(false);
 
   const scaleSlider = document.getElementById('slider-photo-scale');
   if (scaleSlider) scaleSlider.value = 1.0;
@@ -481,6 +561,7 @@ function togglePhotoPanMode() {
 }
 
 function setPhotoPanMode(enabled) {
+  if (enabled && isPhotoRotateModeEnabled) setPhotoRotateMode(false);
   isPhotoPanModeEnabled = enabled;
   if (editorCanvas) editorCanvas.classList.toggle('touch-pan-mode', enabled);
   if (!enabled) {
@@ -497,6 +578,8 @@ function setPhotoPanMode(enabled) {
     const label = document.getElementById('photo-pan-button-label');
     if (label) label.textContent = enabled ? 'Disable Pan & Zoom' : 'Enable Pan & Zoom';
   }
+  const toolbarButton = document.getElementById('tool-pan-button');
+  if (toolbarButton) toolbarButton.setAttribute('aria-pressed', String(enabled));
 
   const status = document.getElementById('photo-pan-status');
   if (status) {
@@ -504,6 +587,25 @@ function setPhotoPanMode(enabled) {
       ? 'Pan and zoom are on. Drag to move, scroll to zoom on desktop, or pinch to zoom on mobile.'
       : 'Pan and zoom are off. Enable them to drag, scroll to zoom, or pinch to zoom.';
   }
+}
+
+function togglePhotoRotateMode() {
+  if (!userCapturedImage) {
+    showToast('Load a photo first');
+    return;
+  }
+  setPhotoRotateMode(!isPhotoRotateModeEnabled);
+}
+
+function setPhotoRotateMode(enabled) {
+  if (enabled && isPhotoPanModeEnabled) setPhotoPanMode(false);
+  isPhotoRotateModeEnabled = enabled;
+  activeRotateGesture = null;
+  if (editorCanvas) editorCanvas.classList.toggle('touch-rotate-mode', enabled);
+  const button = document.getElementById('toggle-photo-rotate');
+  if (button) button.setAttribute('aria-pressed', String(enabled));
+  const label = document.getElementById('photo-rotate-button-label');
+  if (label) label.textContent = enabled ? 'Disable drag to rotate' : 'Enable drag to rotate';
 }
 
 function resetPhotoZoom() {
@@ -635,10 +737,21 @@ function setupCanvasInteractions() {
 
   function onStart(e) {
     if (!userCapturedImage) return;
-    if (!isPhotoPanModeEnabled) return;
+    if (!isPhotoPanModeEnabled && !isPhotoRotateModeEnabled) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
     const pos = getCoords(e);
+    if (isPhotoRotateModeEnabled) {
+      activeRotateGesture = {
+        pointerId: e.pointerId,
+        startAngle: Math.atan2(pos.y - photoY, pos.x - photoX),
+        startRotation: photoRotation
+      };
+      editorCanvas.setPointerCapture(e.pointerId);
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+
     if (e.pointerType === 'touch') {
       if (activeTouchPointers.size >= 2) return;
       activeTouchPointers.set(e.pointerId, pos);
@@ -669,6 +782,16 @@ function setupCanvasInteractions() {
 
   function onMove(e) {
     const pos = getCoords(e);
+    if (activeRotateGesture && e.pointerId === activeRotateGesture.pointerId) {
+      const currentAngle = Math.atan2(pos.y - photoY, pos.x - photoX);
+      let angleDelta = currentAngle - activeRotateGesture.startAngle;
+      if (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
+      if (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
+      updatePhotoRotation(activeRotateGesture.startRotation + angleDelta * 180 / Math.PI);
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+
     if (e.pointerType === 'touch' && activeTouchPointers.has(e.pointerId)) {
       activeTouchPointers.set(e.pointerId, pos);
     }
@@ -694,6 +817,11 @@ function setupCanvasInteractions() {
   }
 
   function onEnd(e) {
+    if (activeRotateGesture && e.pointerId === activeRotateGesture.pointerId) {
+      activeRotateGesture = null;
+      return;
+    }
+
     if (e.pointerType === 'touch' && activeTouchPointers.has(e.pointerId)) {
       activeTouchPointers.delete(e.pointerId);
       activePinch = null;

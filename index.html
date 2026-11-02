@@ -101,24 +101,26 @@
       </header>
 
       <nav class="editor-toolbar" aria-label="Editing tools">
-        <button id="tool-background-button" type="button" onclick="toggleEditorPanel('background-tools')" aria-expanded="false" aria-controls="background-tools"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i><span>Remove BG</span></button>
-        <button id="tool-pan-button" type="button" onclick="toggleEditorPanel('pan-tools')" aria-expanded="false" aria-controls="pan-tools"><i class="fa-solid fa-up-down-left-right" aria-hidden="true"></i><span>Pan &amp; zoom</span></button>
+        <div class="background-tool-group">
+          <button id="tool-background-button" type="button" onclick="toggleBackgroundRemovalFromToolbar()" aria-label="Remove background" aria-pressed="false"><i id="background-removal-button-icon" class="fa-regular fa-square" aria-hidden="true"></i><span>Remove BG</span></button>
+          <button id="tool-background-settings" type="button" class="tool-settings-button" onclick="toggleEditorPanel('background-tools')" aria-label="Background removal settings" title="Background removal settings" aria-expanded="false" aria-controls="background-tools"><i class="fa-solid fa-sliders" aria-hidden="true"></i></button>
+          <div id="background-removal-status" class="background-status hidden" role="status" aria-live="polite">
+            <div><i id="background-removal-status-icon" class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span id="background-removal-status-text"></span></div>
+            <div id="background-removal-progress-track" class="progress-track" role="progressbar" aria-label="Background removal progress" aria-valuemin="0" aria-valuemax="100"><div id="background-removal-progress-bar"></div></div>
+          </div>
+        </div>
+        <button id="tool-pan-button" type="button" onclick="toggleEditorPanel('pan-tools')" aria-pressed="false" aria-expanded="false" aria-controls="pan-tools"><i class="fa-solid fa-up-down-left-right" aria-hidden="true"></i><span>Pan &amp; zoom</span></button>
         <button id="tool-rotate-button" type="button" onclick="toggleEditorPanel('rotate-tools')" aria-expanded="false" aria-controls="rotate-tools"><i class="fa-solid fa-rotate" aria-hidden="true"></i><span>Rotate</span></button>
         <button id="tool-name-button" type="button" onclick="toggleEditorPanel('name-tools')" aria-expanded="false" aria-controls="name-tools"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Name</span></button>
       </nav>
 
       <div class="tool-popovers">
         <section id="background-tools" class="tool-popover" hidden aria-label="Background removal settings">
-          <label class="tool-toggle"><input id="background-removal-toggle" type="checkbox" onchange="handleBackgroundRemovalToggle(this.checked)"><span>Remove background</span></label>
           <label for="background-model-selector">Model</label>
           <select id="background-model-selector" onchange="handleBackgroundModelChange()">
             <option value="isnet_fp16">Balanced</option><option value="isnet">High compatibility</option><option value="isnet_quint8">Smaller download</option>
           </select>
           <p class="tool-note">The model downloads on first use (typically 40–80 MB). Your photo stays on this device.</p>
-          <div id="background-removal-status" class="background-status hidden" role="status" aria-live="polite">
-            <div><i id="background-removal-status-icon" class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span id="background-removal-status-text"></span></div>
-            <div id="background-removal-progress-track" class="progress-track" role="progressbar" aria-label="Background removal progress" aria-valuemin="0" aria-valuemax="100"><div id="background-removal-progress-bar"></div></div>
-          </div>
         </section>
 
         <section id="pan-tools" class="tool-popover" hidden aria-label="Pan and zoom settings">
@@ -130,6 +132,7 @@
         </section>
 
         <section id="rotate-tools" class="tool-popover" hidden aria-label="Rotation settings">
+          <button type="button" id="toggle-photo-rotate" onclick="togglePhotoRotateMode()" aria-pressed="false"><i class="fa-solid fa-rotate" aria-hidden="true"></i><span id="photo-rotate-button-label">Enable drag to rotate</span></button>
           <label for="slider-photo-rotation">Rotation <span id="photo-rotation-value">0°</span></label>
           <input type="range" id="slider-photo-rotation" min="-180" max="180" step="1" value="0" oninput="updatePhotoRotation(this.value)">
           <button type="button" class="subtle-tool-button" onclick="resetPhotoRotation()"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reset rotation</button>
