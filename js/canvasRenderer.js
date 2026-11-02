@@ -572,14 +572,13 @@ function setPhotoPanMode(enabled) {
     activePinch = null;
   }
 
-  const button = document.getElementById('toggle-photo-pan');
-  if (button) {
-    button.setAttribute('aria-pressed', String(enabled));
-    const label = document.getElementById('photo-pan-button-label');
-    if (label) label.textContent = enabled ? 'Disable Pan & Zoom' : 'Enable Pan & Zoom';
-  }
   const toolbarButton = document.getElementById('tool-pan-button');
-  if (toolbarButton) toolbarButton.setAttribute('aria-pressed', String(enabled));
+  if (toolbarButton) {
+    toolbarButton.setAttribute('aria-pressed', String(enabled));
+    toolbarButton.setAttribute('aria-label', enabled ? 'Disable pan and zoom' : 'Enable pan and zoom');
+    const label = toolbarButton.querySelector('span');
+    if (label) label.textContent = enabled ? 'Pan & zoom on' : 'Pan & zoom';
+  }
 
   const status = document.getElementById('photo-pan-status');
   if (status) {

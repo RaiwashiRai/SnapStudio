@@ -67,7 +67,6 @@ main { min-height: calc(100vh - 112px); }
 .editor-toolbar button[aria-expanded="true"] { border-color: #475569; background: #1e293b; color: #f8fafc; }
 .editor-toolbar button[aria-expanded="true"] i { color: #a5b4fc; }
 .editor-toolbar button[aria-pressed="true"] { border-color: #0f766e; background: #115e59; color: #f0fdfa; }
-.background-tool-group { display: flex; min-width: 0; align-items: center; gap: 0.3rem; }
 .editor-toolbar .tool-settings-button { min-width: 2.55rem; padding: 0 0.6rem; }
 .tool-popovers { position: relative; z-index: 2; }
 .tool-popover { width: min(100%, 28rem); margin: 0.55rem 0 0; padding: 1rem; border: 1px solid #475569; border-radius: 0.6rem; background: #111c2f; box-shadow: 0 16px 40px rgba(2, 6, 23, 0.4); color: #cbd5e1; font-size: 0.75rem; animation: popover-arrive 140ms ease-out both; }
@@ -85,6 +84,17 @@ main { min-height: calc(100vh - 112px); }
 .progress-track { height: 0.35rem; overflow: hidden; margin-top: 0.6rem; border-radius: 1rem; background: #334155; }
 .progress-track[hidden] { display: none; }
 .progress-track > div { width: 0; height: 100%; border-radius: inherit; background: #a5b4fc; transition: width 180ms ease; }
+.background-tool-tile { width: min(100%, 40rem); margin: 1.1rem auto 0; padding: 1rem; border: 1px solid #334155; border-radius: 0.65rem; background: #0f172a; }
+.background-tool-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.background-tool-copy { min-width: 0; }
+.background-tool-copy h2 { margin: 0; color: #f1f5f9; font-size: 0.85rem; font-weight: 700; }
+.background-tool-copy p { margin: 0.25rem 0 0; color: #94a3b8; font-size: 0.68rem; }
+.background-tool-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 0.4rem; }
+.background-tool-actions > button:first-child { display: inline-flex; min-height: 2.45rem; align-items: center; justify-content: center; gap: 0.5rem; padding: 0 0.8rem; border: 1px solid #475569; border-radius: 0.45rem; background: #1e293b; color: #e2e8f0; font-size: 0.72rem; font-weight: 650; cursor: pointer; }
+.background-tool-actions > button:first-child[aria-pressed="true"] { border-color: #0f766e; background: #115e59; color: #f0fdfa; }
+.background-tool-actions > .tool-settings-button { display: grid; width: 2.45rem; height: 2.45rem; place-items: center; border: 1px solid #475569; border-radius: 0.45rem; background: #172033; color: #cbd5e1; cursor: pointer; }
+.background-tool-tile > .background-status { margin-top: 0.75rem; }
+.background-tool-tile > .tool-popover { width: 100%; margin-top: 0.75rem; }
 #toggle-photo-pan,
 .subtle-tool-button { display: inline-flex; min-height: 2.25rem; align-items: center; gap: 0.45rem; padding: 0 0.7rem; border: 1px solid #475569; border-radius: 0.45rem; background: #1e293b; color: #e2e8f0; font-size: 0.7rem; font-weight: 650; cursor: pointer; }
 #toggle-photo-pan[aria-pressed="true"] { border-color: #0f766e; background: #115e59; }
@@ -145,10 +155,11 @@ input[type=range] {
   .export-actions button span { display: none; }
   .editor-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .editor-toolbar button { min-width: 0; }
-  .background-tool-group { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) 2.55rem; }
-  .background-tool-group > .background-status { grid-column: 1 / -1; }
-  .background-tool-group > button:first-of-type { min-width: 0; }
   .editor-stage-area { min-height: 48vh; }
+  .background-tool-tile { padding: 0.85rem; }
+  .background-tool-heading { align-items: flex-start; }
+  .background-tool-actions > button:first-child { width: 2.45rem; padding: 0; }
+  .background-tool-actions > button:first-child span { display: none; }
   .name-sliders { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 

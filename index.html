@@ -101,30 +101,14 @@
       </header>
 
       <nav class="editor-toolbar" aria-label="Editing tools">
-        <div class="background-tool-group">
-          <button id="tool-background-button" type="button" onclick="toggleBackgroundRemovalFromToolbar()" aria-label="Remove background" aria-pressed="false"><i id="background-removal-button-icon" class="fa-regular fa-square" aria-hidden="true"></i><span>Remove BG</span></button>
-          <button id="tool-background-settings" type="button" class="tool-settings-button" onclick="toggleEditorPanel('background-tools')" aria-label="Background removal settings" title="Background removal settings" aria-expanded="false" aria-controls="background-tools"><i class="fa-solid fa-sliders" aria-hidden="true"></i></button>
-          <div id="background-removal-status" class="background-status hidden" role="status" aria-live="polite">
-            <div><i id="background-removal-status-icon" class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span id="background-removal-status-text"></span></div>
-            <div id="background-removal-progress-track" class="progress-track" role="progressbar" aria-label="Background removal progress" aria-valuemin="0" aria-valuemax="100"><div id="background-removal-progress-bar"></div></div>
-          </div>
-        </div>
-        <button id="tool-pan-button" type="button" onclick="toggleEditorPanel('pan-tools')" aria-pressed="false" aria-expanded="false" aria-controls="pan-tools"><i class="fa-solid fa-up-down-left-right" aria-hidden="true"></i><span>Pan &amp; zoom</span></button>
+        <button id="tool-pan-button" type="button" onclick="togglePhotoPanMode()" aria-pressed="false"><i class="fa-solid fa-up-down-left-right" aria-hidden="true"></i><span>Pan &amp; zoom</span></button>
+        <button id="tool-pan-settings" type="button" class="tool-settings-button" onclick="toggleEditorPanel('pan-tools')" aria-label="Pan and zoom settings" title="Pan and zoom settings" aria-expanded="false" aria-controls="pan-tools"><i class="fa-solid fa-sliders" aria-hidden="true"></i></button>
         <button id="tool-rotate-button" type="button" onclick="toggleEditorPanel('rotate-tools')" aria-expanded="false" aria-controls="rotate-tools"><i class="fa-solid fa-rotate" aria-hidden="true"></i><span>Rotate</span></button>
         <button id="tool-name-button" type="button" onclick="toggleEditorPanel('name-tools')" aria-expanded="false" aria-controls="name-tools"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Name</span></button>
       </nav>
 
       <div class="tool-popovers">
-        <section id="background-tools" class="tool-popover" hidden aria-label="Background removal settings">
-          <label for="background-model-selector">Model</label>
-          <select id="background-model-selector" onchange="handleBackgroundModelChange()">
-            <option value="isnet_fp16">Balanced</option><option value="isnet">High compatibility</option><option value="isnet_quint8">Smaller download</option>
-          </select>
-          <p class="tool-note">The model downloads on first use (typically 40–80 MB). Your photo stays on this device.</p>
-        </section>
-
         <section id="pan-tools" class="tool-popover" hidden aria-label="Pan and zoom settings">
-          <button type="button" id="toggle-photo-pan" onclick="togglePhotoPanMode()" aria-pressed="false"><i class="fa-solid fa-hand-pointer" aria-hidden="true"></i><span id="photo-pan-button-label">Enable pan &amp; zoom</span></button>
           <label for="slider-photo-scale">Zoom <span id="photo-zoom-value">100%</span></label>
           <input type="range" id="slider-photo-scale" min="0.2" max="3.5" step="0.05" value="1" oninput="updatePhotoScale(this.value)">
           <button type="button" class="subtle-tool-button" onclick="resetPhotoZoom()"><i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Reset zoom</button>
@@ -159,6 +143,29 @@
         </div>
         <p class="stage-caption">Drag to position when Pan &amp; zoom is enabled. Edits stay in your browser.</p>
       </div>
+
+      <section class="background-tool-tile" aria-labelledby="background-tool-title">
+        <div class="background-tool-heading">
+          <div class="background-tool-copy">
+            <h2 id="background-tool-title">Background removal</h2>
+            <p>Remove the photo background on this device.</p>
+          </div>
+          <div class="background-tool-actions">
+            <button id="tool-background-button" type="button" onclick="toggleBackgroundRemovalFromToolbar()" aria-label="Remove background" aria-pressed="false"><i id="background-removal-button-icon" class="fa-regular fa-square" aria-hidden="true"></i><span>Remove background</span></button>
+            <button id="tool-background-settings" type="button" class="tool-settings-button" onclick="toggleEditorPanel('background-tools')" aria-label="Background removal settings" title="Background removal settings" aria-expanded="false" aria-controls="background-tools"><i class="fa-solid fa-sliders" aria-hidden="true"></i></button>
+          </div>
+        </div>
+        <div id="background-removal-status" class="background-status hidden" role="status" aria-live="polite">
+          <div><i id="background-removal-status-icon" class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span id="background-removal-status-text"></span></div>
+          <div id="background-removal-progress-track" class="progress-track" role="progressbar" aria-label="Background removal progress" aria-valuemin="0" aria-valuemax="100"><div id="background-removal-progress-bar"></div></div>
+        </div>
+        <section id="background-tools" class="tool-popover" hidden aria-label="Background removal settings">
+          <label for="background-model-selector">Model</label>
+          <select id="background-model-selector" onchange="handleBackgroundModelChange()">
+            <option value="isnet_fp16">Balanced</option><option value="isnet">High compatibility</option><option value="isnet_quint8">Smaller download</option>
+          </select>
+          <p class="tool-note">The model downloads on first use (typically 40–80 MB). Your photo stays on this device.</p>
+        </section>
     </section>
   </main>
 
