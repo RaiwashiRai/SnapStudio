@@ -1,6 +1,10 @@
 {
   "presets": [
-    "Diwali Preset 1.json",
-    "Diwali Preset 2.json"
+    "Preset 1-preset.json",
+    "Preset 2-preset.json",
+    "Preset 3-preset.json",
+    "Preset 4-preset.json",
+    "Preset 5-preset.json",
+    "Preset 6-preset.json",
   ]
 }
