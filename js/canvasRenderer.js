@@ -1,9 +1,16 @@
 let userCapturedImage = null;
+let uploadedPhotoSource = null;
+let backgroundRemovedPhoto = null;
+let backgroundRemovedPhotoUrl = null;
+let photoUploadToken = 0;
 let activePresetFrameImg = null;
 
 let photoX = 400;
 let photoY = 400;
 let photoScale = 1.0;
+let photoRotation = 0;
+let isBackgroundRemovalEnabled = false;
+let skipEditorPopConfirmation = false;
 
 let isDragging = false;
 let dragStartX = 0;
@@ -11,13 +18,22 @@ let dragStartY = 0;
 let activePointerId = null;
 let activePointerType = null;
 let isPhotoPanModeEnabled = false;
+let isPhotoRotateModeEnabled = false;
+let activeRotateGesture = null;
 const activeTouchPointers = new Map();
 let activePinch = null;
 
 let editorCanvas, editorCtx;
 let presetLoadToken = 0;
+let editorTextEnabled = true;
+let selectedTemplateId = null;
+let selectedTemplatePromise = Promise.resolve(true);
 
 window.addEventListener('DOMContentLoaded', async () => {
+  const setupUrl = new URL(window.location.href);
+  setupUrl.hash = '';
+  history.replaceState({ snapStudioView: 'selection' }, '', setupUrl);
+
   editorCanvas = document.getElementById('editor-canvas');
   if (editorCanvas) {
     editorCtx = editorCanvas.getContext('2d');
@@ -26,44 +42,116 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   try {
     await loadPresetsFromFiles();
-    populatePresetDropdown();
-    applySelectedPreset(presets[0].id);
+    const transferredPreset = sessionStorage.getItem('snapstudio-preset-for-editor');
+    if (transferredPreset) {
+      sessionStorage.removeItem('snapstudio-preset-for-editor');
+      try {
+        addEditorPreset(JSON.parse(transferredPreset));
+      } catch (error) {
+        console.error('Unable to load transferred preset:', error);
+        showToast('Unable to read the creator preset. Check its JSON and try again.');
+      }
+    }
+    renderPresetTemplates();
+    syncEditorCanvasViewport();
   } catch (error) {
     console.error('Failed to load presets:', error);
-    const dropdown = document.getElementById('preset-selector');
-    if (dropdown) {
-      dropdown.innerHTML = '<option value="">Unable to load presets</option>';
-      dropdown.disabled = true;
+    const templateList = document.getElementById('preset-templates');
+    if (templateList) {
+      templateList.textContent = 'Unable to load templates. Serve the app over HTTP and check presets/manifest.json.';
     }
     showToast('Unable to load presets. Serve the app over HTTP and check presets/manifest.json.');
   }
 });
 
-function populatePresetDropdown() {
-  const dropdown = document.getElementById('preset-selector');
-  if (!dropdown) return;
-  dropdown.innerHTML = '';
-  
-  presets.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = p.title || p.id;
-    dropdown.appendChild(opt);
-  });
+window.addEventListener('popstate', handleEditorHistoryNavigation);
+window.addEventListener('beforeunload', confirmEditorExit);
 
-  if (activePreset) {
-    dropdown.value = activePreset.id;
+function addEditorPreset(preset) {
+  if (!preset || typeof preset !== 'object' || Array.isArray(preset) || typeof preset.id !== 'string' || !preset.id.trim()) {
+    throw new Error('Preset must be an object with a non-empty id.');
   }
+  if (preset.frameImageUrl !== undefined && typeof preset.frameImageUrl !== 'string') {
+    throw new Error('Preset frameImageUrl must be a string.');
+  }
+
+  const existingIndex = presets.findIndex(item => item.id === preset.id);
+  if (existingIndex >= 0) presets.splice(existingIndex, 1);
+  presets.push(preset);
+  activePreset = preset;
+}
+
+async function handlePresetJsonUpload(event) {
+  const input = event.target;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    const preset = JSON.parse(await file.text());
+    addEditorPreset(preset);
+    renderPresetTemplates();
+    selectPresetTemplate(preset.id);
+    showToast(`Loaded preset: ${preset.title || preset.id}`);
+  } catch (error) {
+    console.error('Unable to load preset JSON:', error);
+    showToast(error instanceof SyntaxError
+      ? 'Preset file is not valid JSON.'
+      : `Unable to load preset: ${error.message}`);
+  } finally {
+    input.value = '';
+  }
+}
+
+function renderPresetTemplates() {
+  const templateList = document.getElementById('preset-templates');
+  if (!templateList) return;
+  templateList.replaceChildren();
+
+  presets.forEach(p => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'template-choice';
+    button.setAttribute('aria-pressed', String(p.id === selectedTemplateId));
+    button.setAttribute('aria-label', `Select ${p.title || p.id}`);
+    button.addEventListener('click', () => selectPresetTemplate(p.id));
+
+    const preview = document.createElement('span');
+    preview.className = 'template-choice-preview checkerboard';
+    if (p.frameImageUrl) {
+      const image = document.createElement('img');
+      image.alt = '';
+      image.loading = 'lazy';
+      image.src = p.frameImageUrlCandidates?.[0] || p.frameImageUrl;
+      image.onerror = () => {
+        const nextUrl = p.frameImageUrlCandidates?.find(url => url !== image.src);
+        if (nextUrl) image.src = nextUrl;
+        else image.remove();
+      };
+      preview.appendChild(image);
+    } else {
+      preview.style.setProperty('--template-color', p.frameColor || '#64748b');
+      preview.classList.add('template-choice-fallback');
+    }
+
+    const title = document.createElement('span');
+    title.className = 'template-choice-title';
+    title.textContent = p.title || p.id;
+    button.append(preview, title);
+    templateList.appendChild(button);
+  });
 }
 
 function applySelectedPreset(presetId) {
   activePreset = presets.find(p => p.id === presetId);
-  if (!activePreset) return;
+  if (!activePreset) return Promise.resolve(false);
   const loadToken = ++presetLoadToken;
   const selectedPreset = activePreset;
 
-  const selector = document.getElementById('preset-selector');
-  if (selector) selector.value = activePreset.id;
+  const templateTitle = document.getElementById('editor-template-title');
+  if (templateTitle) templateTitle.textContent = activePreset.title || activePreset.id;
+  const nameTool = document.getElementById('tool-name-button');
+  if (nameTool) nameTool.hidden = activePreset.textEnabled === false;
+  updateEditorTextControls();
   activePresetFrameImg = null;
   setEditorCanvasSize(800, 800);
 
@@ -83,32 +171,178 @@ function applySelectedPreset(presetId) {
     const frameImageUrls = activePreset.frameImageUrlCandidates || [activePreset.frameImageUrl];
     let imageUrlIndex = 0;
     const img = new Image();
-    img.onload = () => {
-      if (loadToken !== presetLoadToken) return;
-      activePresetFrameImg = img;
-      setEditorCanvasSize(img.naturalWidth || img.width, img.naturalHeight || img.height);
-      resetPhotoAnchor();
-      redrawEditorCanvas();
-    };
-    img.onerror = () => {
-      if (loadToken !== presetLoadToken) return;
-      imageUrlIndex += 1;
-      if (imageUrlIndex < frameImageUrls.length) {
-        img.src = frameImageUrls[imageUrlIndex];
-        return;
-      }
+    return new Promise(resolve => {
+      img.onload = () => {
+        if (loadToken !== presetLoadToken) return resolve(false);
+        activePresetFrameImg = img;
+        setEditorCanvasSize(img.naturalWidth || img.width, img.naturalHeight || img.height);
+        resetPhotoAnchor();
+        redrawEditorCanvas();
+        resolve(true);
+      };
+      img.onerror = () => {
+        if (loadToken !== presetLoadToken) return resolve(false);
+        imageUrlIndex += 1;
+        if (imageUrlIndex < frameImageUrls.length) {
+          img.src = frameImageUrls[imageUrlIndex];
+          return;
+        }
 
-      activePresetFrameImg = null;
-      redrawEditorCanvas();
-      console.error(`Unable to load template image for preset "${selectedPreset.id}":`, frameImageUrls);
-      showToast(`Unable to load template for ${selectedPreset.title || selectedPreset.id}`);
-    };
-    img.src = frameImageUrls[imageUrlIndex];
+        activePresetFrameImg = null;
+        redrawEditorCanvas();
+        console.error(`Unable to load template image for preset "${selectedPreset.id}":`, frameImageUrls);
+        showToast(`Unable to load template for ${selectedPreset.title || selectedPreset.id}`);
+        resolve(false);
+      };
+      img.src = frameImageUrls[imageUrlIndex];
+    });
   } else {
     activePresetFrameImg = null;
     resetPhotoAnchor();
     redrawEditorCanvas();
+    return Promise.resolve(true);
   }
+}
+
+function selectPresetTemplate(presetId) {
+  selectedTemplateId = presetId;
+  renderPresetTemplates();
+  selectedTemplatePromise = applySelectedPreset(presetId);
+  refreshSelectionState();
+}
+
+function refreshSelectionState() {
+  const confirmButton = document.getElementById('start-editing-button');
+  if (confirmButton) {
+    confirmButton.disabled = !(userCapturedImage && uploadedPhotoSource && selectedTemplateId);
+  }
+}
+
+async function beginEditing() {
+  if (!userCapturedImage || !uploadedPhotoSource) {
+    showToast('Upload or take a photo before continuing.');
+    document.getElementById('photo-upload-actions')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+  if (!selectedTemplateId) {
+    showToast('Choose a template before continuing.');
+    document.getElementById('preset-templates')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
+
+  const selectedId = selectedTemplateId;
+  const templateReady = await selectedTemplatePromise;
+  if (!templateReady || selectedId !== selectedTemplateId) return;
+  history.pushState({ snapStudioView: 'editor' }, '', `${window.location.pathname}${window.location.search}#editor`);
+  document.getElementById('setup-flow').hidden = true;
+  document.getElementById('editor-workspace').hidden = false;
+  syncEditorCanvasViewport();
+  redrawEditorCanvas();
+}
+
+function returnToSelection() {
+  if (!window.confirm('Do you wish to leave the editor and return to photo selection?')) return;
+  if (history.state?.snapStudioView === 'editor') {
+    skipEditorPopConfirmation = true;
+    history.back();
+    return;
+  }
+  showSelectionWorkspace();
+}
+
+function showSelectionWorkspace() {
+  document.getElementById('editor-workspace').hidden = true;
+  document.getElementById('setup-flow').hidden = false;
+  document.querySelectorAll('.tool-popover').forEach(panel => { panel.hidden = true; });
+  document.querySelectorAll('button[aria-controls]').forEach(button => {
+    button.setAttribute('aria-expanded', 'false');
+  });
+  setPhotoPanMode(false);
+  setPhotoRotateMode(false);
+}
+
+function showEditorWorkspace() {
+  document.getElementById('setup-flow').hidden = true;
+  document.getElementById('editor-workspace').hidden = false;
+  syncEditorCanvasViewport();
+  redrawEditorCanvas();
+}
+
+function handleEditorHistoryNavigation(event) {
+  if (event.state?.snapStudioView === 'editor') {
+    showEditorWorkspace();
+    return;
+  }
+
+  const editorWorkspace = document.getElementById('editor-workspace');
+  if (editorWorkspace && !editorWorkspace.hidden && !skipEditorPopConfirmation) {
+    if (!window.confirm('Do you wish to leave the editor and return to photo selection?')) {
+      history.pushState({ snapStudioView: 'editor' }, '', `${window.location.pathname}${window.location.search}#editor`);
+      return;
+    }
+  }
+
+  skipEditorPopConfirmation = false;
+  showSelectionWorkspace();
+}
+
+function confirmEditorExit(event) {
+  const editorWorkspace = document.getElementById('editor-workspace');
+  if (!editorWorkspace || editorWorkspace.hidden) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
+function toggleEditorPanel(panelId) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  const shouldOpen = panel.hidden;
+  document.querySelectorAll('.tool-popover').forEach(item => {
+    if (item !== panel && !item.hidden) disableEditorPanelMode(item.id);
+    item.hidden = true;
+  });
+  document.querySelectorAll('button[aria-controls]').forEach(button => {
+    button.setAttribute('aria-expanded', 'false');
+  });
+  if (!shouldOpen) {
+    disableEditorPanelMode(panelId);
+    return;
+  }
+  panel.hidden = false;
+  const button = document.querySelector(`button[aria-controls="${panelId}"]`);
+  if (button) button.setAttribute('aria-expanded', 'true');
+}
+
+function disableEditorPanelMode(panelId) {
+  if (panelId === 'pan-tools') setPhotoPanMode(false);
+  if (panelId === 'rotate-tools') setPhotoRotateMode(false);
+}
+
+function toggleEditorToolMode(panelId, mode) {
+  if (!userCapturedImage) {
+    showToast('Load a photo first');
+    return;
+  }
+  const isEnabled = mode === 'pan' ? isPhotoPanModeEnabled : isPhotoRotateModeEnabled;
+  if (isEnabled) {
+    disableEditorPanelMode(panelId);
+    if (!document.getElementById(panelId).hidden) toggleEditorPanel(panelId);
+    return;
+  }
+  if (document.getElementById(panelId).hidden) toggleEditorPanel(panelId);
+  if (mode === 'pan') setPhotoPanMode(true);
+  else setPhotoRotateMode(true);
+}
+
+function syncEditorCanvasViewport() {
+  if (!editorCanvas) return;
+  const stageViewport = document.getElementById('editor-stage-viewport');
+  if (!stageViewport) return;
+  const ratio = editorCanvas.width / editorCanvas.height;
+  const maxWidth = Math.min(stageViewport.parentElement.clientWidth || 900, 900);
+  const maxHeight = Math.min(window.innerHeight * 0.68, 760);
+  stageViewport.style.width = `${Math.max(1, Math.min(maxWidth, maxHeight * ratio))}px`;
+  stageViewport.style.aspectRatio = `${editorCanvas.width} / ${editorCanvas.height}`;
 }
 
 function getEditorLayerZ() {
@@ -119,6 +353,29 @@ function getEditorLayerZ() {
   };
 }
 
+function updateEditorTextControls() {
+  const controls = document.getElementById('editor-text-controls');
+  const toggle = document.getElementById('editor-text-enabled');
+  editorTextEnabled = activePreset?.textEnabled !== false;
+  if (toggle) toggle.checked = editorTextEnabled;
+  if (controls) {
+    controls.hidden = !editorTextEnabled;
+    controls.classList.toggle('hidden', !editorTextEnabled);
+  }
+}
+
+function handleEditorTextToggle(enabled) {
+  editorTextEnabled = enabled;
+  const toggle = document.getElementById('editor-text-enabled');
+  if (toggle) toggle.checked = enabled;
+  const controls = document.getElementById('editor-text-controls');
+  if (controls) {
+    controls.hidden = !enabled;
+    controls.classList.toggle('hidden', !enabled);
+  }
+  redrawEditorCanvas();
+}
+
 function resetPhotoAnchor() {
   if (!editorCanvas || !activePreset) return;
   photoX = editorCanvas.width * Number(activePreset.anchorXPercent ?? 50) / 100;
@@ -126,13 +383,10 @@ function resetPhotoAnchor() {
 }
 
 function setEditorCanvasSize(width, height) {
-  const stageViewport = document.getElementById('editor-stage-viewport');
   if (editorCanvas) {
     editorCanvas.width = width;
     editorCanvas.height = height;
-    if (stageViewport) {
-      stageViewport.style.aspectRatio = `${width} / ${height}`;
-    }
+    syncEditorCanvasViewport();
   }
 
   redrawEditorCanvas();
@@ -142,26 +396,147 @@ function handlePhotoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
+  const uploadToken = ++photoUploadToken;
+  cancelImageBackgroundRemoval();
   const reader = new FileReader();
   reader.onload = (event) => {
+    if (uploadToken !== photoUploadToken) return;
+    const imageSource = event.target.result;
     const img = new Image();
     img.onload = () => {
+      if (uploadToken !== photoUploadToken) return;
       userCapturedImage = img;
+      uploadedPhotoSource = imageSource;
+      updatePhotoSelectionPreview(imageSource);
+      clearBackgroundRemovedPhoto();
       resetPhotoPlacement();
+      refreshSelectionState();
+      if (isBackgroundRemovalEnabled) {
+        startPhotoBackgroundRemoval();
+      }
     };
-    img.src = event.target.result;
+    img.onerror = () => showToast('Unable to load photo');
+    img.src = imageSource;
   };
+  reader.onerror = () => showToast('Unable to read photo');
   reader.readAsDataURL(file);
+}
+
+function updatePhotoSelectionPreview(imageSource) {
+  const preview = document.getElementById('selected-photo-preview');
+  const image = document.getElementById('selected-photo-thumbnail');
+  if (!preview || !image) return;
+  image.src = imageSource;
+  preview.hidden = false;
+  refreshSelectionState();
+}
+
+function removeSelectedPhoto() {
+  photoUploadToken += 1;
+  cancelImageBackgroundRemoval();
+  clearBackgroundRemovedPhoto();
+  userCapturedImage = null;
+  uploadedPhotoSource = null;
+  ['photo-upload-file', 'photo-camera-file'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+  const preview = document.getElementById('selected-photo-preview');
+  const image = document.getElementById('selected-photo-thumbnail');
+  if (image) image.removeAttribute('src');
+  if (preview) preview.hidden = true;
+  refreshSelectionState();
+  redrawEditorCanvas();
+}
+
+function clearBackgroundRemovedPhoto() {
+  if (backgroundRemovedPhotoUrl) URL.revokeObjectURL(backgroundRemovedPhotoUrl);
+  backgroundRemovedPhoto = null;
+  backgroundRemovedPhotoUrl = null;
+}
+
+function startPhotoBackgroundRemoval() {
+  if (!uploadedPhotoSource) return;
+  const uploadToken = photoUploadToken;
+  const model = document.getElementById('background-model-selector').value;
+
+  processImageBackgroundRemoval(uploadedPhotoSource, model, blob => {
+    const imageUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      if (uploadToken !== photoUploadToken || !isBackgroundRemovalEnabled) {
+        URL.revokeObjectURL(imageUrl);
+        return;
+      }
+      clearBackgroundRemovedPhoto();
+      backgroundRemovedPhoto = img;
+      backgroundRemovedPhotoUrl = imageUrl;
+      setBackgroundRemovalStatus('Background removed', 'success');
+      redrawEditorCanvas();
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(imageUrl);
+      showToast('Unable to load processed photo');
+    };
+    img.src = imageUrl;
+  }, (_error, message) => {
+    clearBackgroundRemovedPhoto();
+    isBackgroundRemovalEnabled = false;
+    syncBackgroundRemovalButton();
+    redrawEditorCanvas();
+    showToast(`${message} Original photo kept.`);
+  });
+}
+
+function handleBackgroundRemovalToggle(enabled) {
+  isBackgroundRemovalEnabled = enabled;
+  syncBackgroundRemovalButton();
+  cancelImageBackgroundRemoval();
+  if (enabled) {
+    startPhotoBackgroundRemoval();
+    return;
+  }
+  clearBackgroundRemovedPhoto();
+  redrawEditorCanvas();
+}
+
+function toggleBackgroundRemovalFromToolbar() {
+  const enabled = !isBackgroundRemovalEnabled;
+  if (enabled && !uploadedPhotoSource) {
+    showToast('Load a photo before removing its background.');
+    return;
+  }
+  handleBackgroundRemovalToggle(enabled);
+}
+
+function syncBackgroundRemovalButton() {
+  const button = document.getElementById('tool-background-button');
+  const icon = document.getElementById('background-removal-button-icon');
+  if (button) button.setAttribute('aria-pressed', String(isBackgroundRemovalEnabled));
+  if (icon) icon.className = isBackgroundRemovalEnabled
+    ? 'fa-solid fa-square-check'
+    : 'fa-regular fa-square';
+}
+
+function handleBackgroundModelChange() {
+  if (isBackgroundRemovalEnabled) {
+    startPhotoBackgroundRemoval();
+  }
 }
 
 function resetPhotoPlacement() {
   if (!editorCanvas) return;
   resetPhotoAnchor();
   photoScale = 1.0;
+  photoRotation = 0;
   setPhotoPanMode(false);
+  setPhotoRotateMode(false);
 
   const scaleSlider = document.getElementById('slider-photo-scale');
   if (scaleSlider) scaleSlider.value = 1.0;
+  const rotationSlider = document.getElementById('slider-photo-rotation');
+  if (rotationSlider) rotationSlider.value = 0;
+  updatePhotoRotationDisplay();
 
   redrawEditorCanvas();
   showToast('Image loaded to Canvas Stage');
@@ -169,6 +544,30 @@ function resetPhotoPlacement() {
 
 function updatePhotoScale(val) {
   setPhotoScale(parseFloat(val));
+  redrawEditorCanvas();
+}
+
+function updatePhotoRotation(val) {
+  photoRotation = Math.min(180, Math.max(-180, parseFloat(val)));
+  const rotationSlider = document.getElementById('slider-photo-rotation');
+  if (rotationSlider) rotationSlider.value = photoRotation;
+  updatePhotoRotationDisplay();
+  redrawEditorCanvas();
+}
+
+function updatePhotoRotationDisplay() {
+  const value = `${Math.trunc(photoRotation)}°`;
+  const rotationValue = document.getElementById('photo-rotation-value');
+  if (rotationValue) rotationValue.textContent = value;
+  const toolbarValue = document.getElementById('toolbar-rotation-value');
+  if (toolbarValue) toolbarValue.textContent = value;
+}
+
+function resetPhotoRotation() {
+  photoRotation = 0;
+  const rotationSlider = document.getElementById('slider-photo-rotation');
+  if (rotationSlider) rotationSlider.value = 0;
+  updatePhotoRotationDisplay();
   redrawEditorCanvas();
 }
 
@@ -182,6 +581,8 @@ function setPhotoScale(scale, anchor) {
   photoScale = nextScale;
   const scaleSlider = document.getElementById('slider-photo-scale');
   if (scaleSlider) scaleSlider.value = photoScale;
+  const zoomValue = document.getElementById('photo-zoom-value');
+  if (zoomValue) zoomValue.textContent = `${Math.round(photoScale * 100)}%`;
 }
 
 function togglePhotoPanMode() {
@@ -194,6 +595,7 @@ function togglePhotoPanMode() {
 }
 
 function setPhotoPanMode(enabled) {
+  if (enabled && isPhotoRotateModeEnabled) setPhotoRotateMode(false);
   isPhotoPanModeEnabled = enabled;
   if (editorCanvas) editorCanvas.classList.toggle('touch-pan-mode', enabled);
   if (!enabled) {
@@ -204,11 +606,18 @@ function setPhotoPanMode(enabled) {
     activePinch = null;
   }
 
-  const button = document.getElementById('toggle-photo-pan');
-  if (button) {
-    button.setAttribute('aria-pressed', String(enabled));
+  const toolbarButton = document.getElementById('tool-pan-button');
+  if (toolbarButton) {
+    toolbarButton.setAttribute('aria-pressed', String(enabled));
+    toolbarButton.setAttribute('aria-label', enabled ? 'Disable pan and zoom' : 'Enable pan and zoom');
+    const label = toolbarButton.querySelector('span');
+    if (label) label.textContent = enabled ? 'Pan & zoom on' : 'Pan & zoom';
+  }
+  const detailsButton = document.getElementById('toggle-photo-pan');
+  if (detailsButton) {
+    detailsButton.setAttribute('aria-pressed', String(enabled));
     const label = document.getElementById('photo-pan-button-label');
-    if (label) label.textContent = enabled ? 'Disable Pan & Zoom' : 'Enable Pan & Zoom';
+    if (label) label.textContent = enabled ? 'Disable pan & zoom' : 'Enable pan & zoom';
   }
 
   const status = document.getElementById('photo-pan-status');
@@ -217,6 +626,38 @@ function setPhotoPanMode(enabled) {
       ? 'Pan and zoom are on. Drag to move, scroll to zoom on desktop, or pinch to zoom on mobile.'
       : 'Pan and zoom are off. Enable them to drag, scroll to zoom, or pinch to zoom.';
   }
+}
+
+function togglePhotoRotateMode() {
+  if (!userCapturedImage) {
+    showToast('Load a photo first');
+    return;
+  }
+  setPhotoRotateMode(!isPhotoRotateModeEnabled);
+}
+
+function setPhotoRotateMode(enabled) {
+  if (enabled && isPhotoPanModeEnabled) setPhotoPanMode(false);
+  isPhotoRotateModeEnabled = enabled;
+  activeRotateGesture = null;
+  if (editorCanvas) editorCanvas.classList.toggle('touch-rotate-mode', enabled);
+  const button = document.getElementById('toggle-photo-rotate');
+  if (button) button.setAttribute('aria-pressed', String(enabled));
+  const label = document.getElementById('photo-rotate-button-label');
+  if (label) label.textContent = enabled ? 'Disable drag to rotate' : 'Enable drag to rotate';
+  const toolbarButton = document.getElementById('tool-rotate-button');
+  if (toolbarButton) {
+    toolbarButton.setAttribute('aria-pressed', String(enabled));
+    toolbarButton.setAttribute('aria-label', enabled ? 'Disable drag to rotate' : 'Enable drag to rotate');
+  }
+  const toolbarIcon = document.getElementById('toolbar-rotate-icon');
+  if (toolbarIcon) toolbarIcon.className = enabled
+    ? 'fa-solid fa-rotate'
+    : 'fa-solid fa-arrows-rotate';
+  const detailsIcon = document.getElementById('photo-rotate-icon');
+  if (detailsIcon) detailsIcon.className = enabled
+    ? 'fa-solid fa-rotate'
+    : 'fa-solid fa-arrows-rotate';
 }
 
 function resetPhotoZoom() {
@@ -265,19 +706,20 @@ function redrawEditorCanvas() {
     {
       zIndex: layerZ.photo,
       draw: () => {
-        if (!userCapturedImage) return;
-        const fitScale = Math.min(W / userCapturedImage.width, H / userCapturedImage.height);
-        const drawW = userCapturedImage.width * fitScale * photoScale;
-        const drawH = userCapturedImage.height * fitScale * photoScale;
+        const photo = backgroundRemovedPhoto || userCapturedImage;
+        if (!photo) return;
+        const fitScale = Math.min(W / photo.width, H / photo.height);
+        const drawW = photo.width * fitScale * photoScale;
+        const drawH = photo.height * fitScale * photoScale;
         drawMaskedPhotoLayer(editorCtx, {
           width: W,
           height: H,
-          image: userCapturedImage,
+          image: photo,
           x: photoX,
           y: photoY,
           drawWidth: drawW,
           drawHeight: drawH,
-          rotation: 0,
+          rotation: photoRotation,
           maskAnchorX: W * Number(activePreset.anchorXPercent ?? 50) / 100,
           maskAnchorY: H * Number(activePreset.anchorYPercent ?? 45) / 100,
           masks: activePreset.masks || []
@@ -294,6 +736,7 @@ function redrawEditorCanvas() {
     {
       zIndex: layerZ.text,
       draw: () => {
+        if (!editorTextEnabled) return;
         editorCtx.save();
         editorCtx.fillStyle = textColor;
         editorCtx.font = `${fontWeight} ${fontSize}px "${fontFamily}", sans-serif`;
@@ -346,10 +789,21 @@ function setupCanvasInteractions() {
 
   function onStart(e) {
     if (!userCapturedImage) return;
-    if (!isPhotoPanModeEnabled) return;
+    if (!isPhotoPanModeEnabled && !isPhotoRotateModeEnabled) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
 
     const pos = getCoords(e);
+    if (isPhotoRotateModeEnabled) {
+      activeRotateGesture = {
+        pointerId: e.pointerId,
+        startAngle: Math.atan2(pos.y - photoY, pos.x - photoX),
+        startRotation: photoRotation
+      };
+      editorCanvas.setPointerCapture(e.pointerId);
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+
     if (e.pointerType === 'touch') {
       if (activeTouchPointers.size >= 2) return;
       activeTouchPointers.set(e.pointerId, pos);
@@ -380,6 +834,16 @@ function setupCanvasInteractions() {
 
   function onMove(e) {
     const pos = getCoords(e);
+    if (activeRotateGesture && e.pointerId === activeRotateGesture.pointerId) {
+      const currentAngle = Math.atan2(pos.y - photoY, pos.x - photoX);
+      let angleDelta = currentAngle - activeRotateGesture.startAngle;
+      if (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
+      if (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
+      updatePhotoRotation(activeRotateGesture.startRotation + angleDelta * 180 / Math.PI);
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+
     if (e.pointerType === 'touch' && activeTouchPointers.has(e.pointerId)) {
       activeTouchPointers.set(e.pointerId, pos);
     }
@@ -405,6 +869,11 @@ function setupCanvasInteractions() {
   }
 
   function onEnd(e) {
+    if (activeRotateGesture && e.pointerId === activeRotateGesture.pointerId) {
+      activeRotateGesture = null;
+      return;
+    }
+
     if (e.pointerType === 'touch' && activeTouchPointers.has(e.pointerId)) {
       activeTouchPointers.delete(e.pointerId);
       activePinch = null;
@@ -467,3 +936,28 @@ function downloadCanvasComposite() {
     showToast('Unable to download PNG. Please try again.');
   }
 }
+
+async function shareCanvasComposite() {
+  if (!userCapturedImage) {
+    showToast('Load a photo first');
+    return;
+  }
+
+  try {
+    const blob = await new Promise(resolve => editorCanvas.toBlob(resolve, 'image/png'));
+    if (!blob) throw new Error('Unable to encode the canvas as a PNG.');
+    const file = new File([blob], 'SnapStudio-creation.png', { type: 'image/png' });
+    if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+      await navigator.share({ files: [file], title: 'My SnapStudio creation' });
+      return;
+    }
+    showToast('Sharing is not available in this browser. Download the PNG instead.');
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      console.error('Unable to share the canvas:', error);
+      showToast('Unable to share this image. Try downloading the PNG.');
+    }
+  }
+}
+
+window.addEventListener('resize', syncEditorCanvasViewport);
