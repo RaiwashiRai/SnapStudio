@@ -31,12 +31,22 @@ async function loadPresetsFromFiles() {
     }
 
     if (typeof preset.frameImageUrl === 'string' && preset.frameImageUrl) {
-      const presetRelativeUrl = new URL(preset.frameImageUrl, presetUrl).href;
-      const siteRelativeUrl = new URL(preset.frameImageUrl, document.baseURI).href;
-      const frameImageUrls = /^\.\/Templates\//i.test(preset.frameImageUrl)
-        ? [siteRelativeUrl, presetRelativeUrl]
-        : [presetRelativeUrl, siteRelativeUrl];
-      preset.frameImageUrlCandidates = [...new Set(frameImageUrls)];
+      if (/^data:image\//i.test(preset.frameImageUrl)) {
+        const imageResponse = await fetch(preset.frameImageUrl);
+        const imageUrl = URL.createObjectURL(await imageResponse.blob());
+        preset.frameImageUrl = imageUrl;
+        preset.frameImageUrlCandidates = [imageUrl];
+      } else {
+        const presetRelativeUrl = new URL(preset.frameImageUrl, presetUrl).href;
+        const siteRelativeUrl = new URL(preset.frameImageUrl, document.baseURI).href;
+        const frameImageUrls = /^\.\/Templates\//i.test(preset.frameImageUrl)
+          ? [siteRelativeUrl, presetRelativeUrl]
+          : [presetRelativeUrl, siteRelativeUrl];
+        preset.frameImageUrlCandidates = [...new Set(frameImageUrls)];
+      }
+    }
+    if (typeof preset.thumbnailUrl === 'string' && preset.thumbnailUrl && !/^data:/i.test(preset.thumbnailUrl)) {
+      preset.thumbnailUrl = new URL(preset.thumbnailUrl, document.baseURI).href;
     }
     return preset;
   }));
