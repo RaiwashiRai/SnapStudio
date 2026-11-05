@@ -72,7 +72,12 @@
             <span class="step-number">02</span>
             <div><h2 id="template-step-title">Choose a template</h2><p>Select a frame to preview your composition.</p></div>
           </div>
-          <div id="preset-templates" class="preset-templates" aria-label="Available photo templates"></div>
+          <div id="preset-templates" class="preset-templates" aria-label="Available photo templates">
+            <div class="template-loading" role="status">
+              <span class="template-loading-spinner" aria-hidden="true"></span>
+              <span>Loading presets...</span>
+            </div>
+          </div>
           <label class="import-preset-button">
             <i class="fa-solid fa-file-import" aria-hidden="true"></i> Import preset JSON
             <input id="preset-json-input" type="file" accept=".json,application/json" onchange="handlePresetJsonUpload(event)" class="sr-only">
