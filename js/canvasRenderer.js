@@ -1,9 +1,19 @@
 let userCapturedImage = null;
+let userCapturedImagePreview = null;
 let uploadedPhotoSource = null;
+let uploadedPhotoObjectUrl = null;
 let backgroundRemovedPhoto = null;
+let backgroundRemovedPhotoPreview = null;
 let backgroundRemovedPhotoUrl = null;
 let photoUploadToken = 0;
 let activePresetFrameImg = null;
+let activePresetFramePreviewImg = null;
+let isCompositeExportInProgress = false;
+
+const MAX_EDITOR_PREVIEW_EDGE = 1280;
+const MAX_EDITOR_PREVIEW_PIXELS = 1200000;
+const MAX_EXPORT_EDGE = 8192;
+const MAX_EXPORT_PIXELS = 24000000;
 
 let photoX = 400;
 let photoY = 400;
@@ -46,7 +56,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (transferredPreset) {
       sessionStorage.removeItem('snapstudio-preset-for-editor');
       try {
-        addEditorPreset(JSON.parse(transferredPreset));
+        await addEditorPreset(JSON.parse(transferredPreset));
       } catch (error) {
         console.error('Unable to load transferred preset:', error);
         showToast('Unable to read the creator preset. Check its JSON and try again.');
@@ -67,16 +77,29 @@ window.addEventListener('DOMContentLoaded', async () => {
 window.addEventListener('popstate', handleEditorHistoryNavigation);
 window.addEventListener('beforeunload', confirmEditorExit);
 
-function addEditorPreset(preset) {
+async function addEditorPreset(preset) {
   if (!preset || typeof preset !== 'object' || Array.isArray(preset) || typeof preset.id !== 'string' || !preset.id.trim()) {
     throw new Error('Preset must be an object with a non-empty id.');
   }
   if (preset.frameImageUrl !== undefined && typeof preset.frameImageUrl !== 'string') {
     throw new Error('Preset frameImageUrl must be a string.');
   }
+  if (/^data:image\//i.test(preset.frameImageUrl || '')) {
+    const response = await fetch(preset.frameImageUrl);
+    if (!response.ok) throw new Error(`Unable to prepare preset artwork (${response.status}).`);
+    const imageUrl = URL.createObjectURL(await response.blob());
+    preset.frameImageUrl = imageUrl;
+    preset.frameImageUrlCandidates = [imageUrl];
+  }
 
   const existingIndex = presets.findIndex(item => item.id === preset.id);
-  if (existingIndex >= 0) presets.splice(existingIndex, 1);
+  if (existingIndex >= 0) {
+    const [existingPreset] = presets.splice(existingIndex, 1);
+    (existingPreset.frameImageUrlCandidates || [existingPreset.frameImageUrl]).forEach(url => {
+      if (typeof url === 'string' && url.startsWith('blob:')) URL.revokeObjectURL(url);
+    });
+    if (existingPreset.generatedThumbnailUrl) URL.revokeObjectURL(existingPreset.generatedThumbnailUrl);
+  }
   presets.push(preset);
   activePreset = preset;
 }
@@ -88,7 +111,7 @@ async function handlePresetJsonUpload(event) {
 
   try {
     const preset = JSON.parse(await file.text());
-    addEditorPreset(preset);
+    await addEditorPreset(preset);
     renderPresetTemplates();
     selectPresetTemplate(preset.id);
     showToast(`Loaded preset: ${preset.title || preset.id}`);
@@ -100,6 +123,29 @@ async function handlePresetJsonUpload(event) {
   } finally {
     input.value = '';
   }
+}
+
+async function createPresetThumbnailUrl(image) {
+  const dimensions = getScaledDimensions(
+    image.naturalWidth || image.width,
+    image.naturalHeight || image.height,
+    360,
+    129600
+  );
+  const preview = await createPreviewImage(image, dimensions.width, dimensions.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = dimensions.width;
+  canvas.height = dimensions.height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    releasePreviewImage(preview, image);
+    throw new Error('Unable to prepare a preset thumbnail.');
+  }
+  context.drawImage(preview, 0, 0);
+  releasePreviewImage(preview, image);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.78));
+  if (!blob) throw new Error('Unable to encode a preset thumbnail.');
+  return URL.createObjectURL(blob);
 }
 
 function renderPresetTemplates() {
@@ -126,7 +172,21 @@ function renderPresetTemplates() {
       const image = document.createElement('img');
       image.alt = '';
       image.loading = 'lazy';
-      image.onload = () => thumbnailLoader.remove();
+      image.dataset.presetId = p.id;
+      image.onload = () => {
+        thumbnailLoader.remove();
+        if (p.thumbnailUrl || p.generatedThumbnailUrl || p.thumbnailPromise) return;
+        p.thumbnailPromise = createPresetThumbnailUrl(image).then(url => {
+          p.generatedThumbnailUrl = url;
+          templateList.querySelectorAll('img[data-preset-id]').forEach(thumbnail => {
+            if (thumbnail.dataset.presetId === p.id) thumbnail.src = url;
+          });
+        }).catch(error => {
+          console.warn(`Unable to generate a thumbnail for preset "${p.id}":`, error);
+        }).finally(() => {
+          p.thumbnailPromise = null;
+        });
+      };
       image.onerror = () => {
         const nextUrl = p.frameImageUrlCandidates?.find(url => url !== image.src);
         if (nextUrl) {
@@ -136,7 +196,7 @@ function renderPresetTemplates() {
         thumbnailLoader.remove();
         image.remove();
       };
-      image.src = p.frameImageUrlCandidates?.[0] || p.frameImageUrl;
+      image.src = p.thumbnailUrl || p.generatedThumbnailUrl || p.frameImageUrlCandidates?.[0] || p.frameImageUrl;
       preview.appendChild(image);
     } else {
       preview.style.setProperty('--template-color', p.frameColor || '#64748b');
@@ -162,7 +222,9 @@ function applySelectedPreset(presetId) {
   const nameTool = document.getElementById('tool-name-button');
   if (nameTool) nameTool.hidden = activePreset.textEnabled === false;
   updateEditorTextControls();
+  releasePreviewImage(activePresetFramePreviewImg, activePresetFrameImg);
   activePresetFrameImg = null;
+  activePresetFramePreviewImg = null;
   setEditorCanvasSize(800, 800);
 
   const textInput = document.getElementById('input-editor-text');
@@ -185,10 +247,30 @@ function applySelectedPreset(presetId) {
       img.onload = () => {
         if (loadToken !== presetLoadToken) return resolve(false);
         activePresetFrameImg = img;
-        setEditorCanvasSize(img.naturalWidth || img.width, img.naturalHeight || img.height);
-        resetPhotoAnchor();
-        redrawEditorCanvas();
-        resolve(true);
+        const dimensions = getScaledDimensions(
+          img.naturalWidth || img.width,
+          img.naturalHeight || img.height,
+          MAX_EDITOR_PREVIEW_EDGE,
+          MAX_EDITOR_PREVIEW_PIXELS
+        );
+        setEditorCanvasSize(dimensions.width, dimensions.height);
+        createPreviewImage(img, dimensions.width, dimensions.height).then(preview => {
+          if (loadToken !== presetLoadToken) {
+            releasePreviewImage(preview, img);
+            return resolve(false);
+          }
+          activePresetFramePreviewImg = preview;
+          resetPhotoAnchor();
+          redrawEditorCanvas();
+          resolve(true);
+        }).catch(error => {
+          if (loadToken !== presetLoadToken) return resolve(false);
+          console.error(`Unable to create a template preview for preset "${selectedPreset.id}":`, error);
+          activePresetFrameImg = null;
+          setEditorCanvasSize(800, 800);
+          showToast('Unable to prepare this template preview. Try another template.');
+          resolve(false);
+        });
       };
       img.onerror = () => {
         if (loadToken !== presetLoadToken) return resolve(false);
@@ -199,6 +281,7 @@ function applySelectedPreset(presetId) {
         }
 
         activePresetFrameImg = null;
+        activePresetFramePreviewImg = null;
         redrawEditorCanvas();
         console.error(`Unable to load template image for preset "${selectedPreset.id}":`, frameImageUrls);
         showToast(`Unable to load template for ${selectedPreset.title || selectedPreset.id}`);
@@ -224,12 +307,12 @@ function selectPresetTemplate(presetId) {
 function refreshSelectionState() {
   const confirmButton = document.getElementById('start-editing-button');
   if (confirmButton) {
-    confirmButton.disabled = !(userCapturedImage && uploadedPhotoSource && selectedTemplateId);
+    confirmButton.disabled = !(userCapturedImage && userCapturedImagePreview && uploadedPhotoSource && selectedTemplateId);
   }
 }
 
 async function beginEditing() {
-  if (!userCapturedImage || !uploadedPhotoSource) {
+  if (!userCapturedImage || !userCapturedImagePreview || !uploadedPhotoSource) {
     showToast('Upload or take a photo before continuing.');
     document.getElementById('photo-upload-actions')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
@@ -355,11 +438,53 @@ function syncEditorCanvasViewport() {
   stageViewport.style.aspectRatio = `${editorCanvas.width} / ${editorCanvas.height}`;
 }
 
-function getEditorLayerZ() {
+function getScaledDimensions(width, height, maxEdge, maxPixels) {
+  const scale = Math.min(
+    1,
+    maxEdge / Math.max(width, height),
+    Math.sqrt(maxPixels / (width * height))
+  );
   return {
-    photo: Number(activePreset.zIndex?.photo ?? 0),
-    template: Number(activePreset.zIndex?.template ?? 2),
-    text: Number(activePreset.zIndex?.text ?? 3)
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale))
+  };
+}
+
+async function createPreviewImage(image, width, height) {
+  if (image.width === width && image.height === height) return image;
+
+  if (typeof createImageBitmap === 'function') {
+    try {
+      return await createImageBitmap(image, {
+        resizeWidth: width,
+        resizeHeight: height,
+        resizeQuality: 'medium'
+      });
+    } catch (error) {
+      console.warn('Unable to resize image with createImageBitmap; using a canvas preview:', error);
+    }
+  }
+
+  const preview = document.createElement('canvas');
+  preview.width = width;
+  preview.height = height;
+  const context = preview.getContext('2d');
+  if (!context) throw new Error('Unable to create a low-resolution preview.');
+  context.drawImage(image, 0, 0, width, height);
+  return preview;
+}
+
+function releasePreviewImage(preview, original) {
+  if (preview && preview !== original && typeof preview.close === 'function') {
+    preview.close();
+  }
+}
+
+function getEditorLayerZ(preset = activePreset) {
+  return {
+    photo: Number(preset.zIndex?.photo ?? 0),
+    template: Number(preset.zIndex?.template ?? 2),
+    text: Number(preset.zIndex?.text ?? 3)
   };
 }
 
@@ -408,28 +533,51 @@ function handlePhotoUpload(e) {
 
   const uploadToken = ++photoUploadToken;
   cancelImageBackgroundRemoval();
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    if (uploadToken !== photoUploadToken) return;
-    const imageSource = event.target.result;
-    const img = new Image();
-    img.onload = () => {
-      if (uploadToken !== photoUploadToken) return;
-      userCapturedImage = img;
-      uploadedPhotoSource = imageSource;
-      updatePhotoSelectionPreview(imageSource);
-      clearBackgroundRemovedPhoto();
-      resetPhotoPlacement();
-      refreshSelectionState();
-      if (isBackgroundRemovalEnabled) {
-        startPhotoBackgroundRemoval();
+  const imageUrl = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    if (uploadToken !== photoUploadToken) {
+      URL.revokeObjectURL(imageUrl);
+      return;
+    }
+    releasePreviewImage(userCapturedImagePreview, userCapturedImage);
+    if (uploadedPhotoObjectUrl) URL.revokeObjectURL(uploadedPhotoObjectUrl);
+    userCapturedImage = img;
+    userCapturedImagePreview = null;
+    uploadedPhotoSource = file;
+    uploadedPhotoObjectUrl = imageUrl;
+    updatePhotoSelectionPreview(imageUrl);
+    clearBackgroundRemovedPhoto();
+    resetPhotoPlacement();
+    refreshSelectionState();
+    const dimensions = getScaledDimensions(
+      img.naturalWidth || img.width,
+      img.naturalHeight || img.height,
+      MAX_EDITOR_PREVIEW_EDGE,
+      MAX_EDITOR_PREVIEW_PIXELS
+    );
+    createPreviewImage(img, dimensions.width, dimensions.height).then(preview => {
+      if (uploadToken !== photoUploadToken) {
+        releasePreviewImage(preview, img);
+        return;
       }
-    };
-    img.onerror = () => showToast('Unable to load photo');
-    img.src = imageSource;
+      userCapturedImagePreview = preview;
+      redrawEditorCanvas();
+      refreshSelectionState();
+    }).catch(error => {
+      console.error('Unable to create a low-resolution photo preview:', error);
+      refreshSelectionState();
+      showToast('Unable to prepare a photo preview. Try a smaller image.');
+    });
+    if (isBackgroundRemovalEnabled) {
+      startPhotoBackgroundRemoval();
+    }
   };
-  reader.onerror = () => showToast('Unable to read photo');
-  reader.readAsDataURL(file);
+  img.onerror = () => {
+    URL.revokeObjectURL(imageUrl);
+    showToast('Unable to load photo');
+  };
+  img.src = imageUrl;
 }
 
 function updatePhotoSelectionPreview(imageSource) {
@@ -445,8 +593,12 @@ function removeSelectedPhoto() {
   photoUploadToken += 1;
   cancelImageBackgroundRemoval();
   clearBackgroundRemovedPhoto();
+  releasePreviewImage(userCapturedImagePreview, userCapturedImage);
+  if (uploadedPhotoObjectUrl) URL.revokeObjectURL(uploadedPhotoObjectUrl);
   userCapturedImage = null;
+  userCapturedImagePreview = null;
   uploadedPhotoSource = null;
+  uploadedPhotoObjectUrl = null;
   ['photo-upload-file', 'photo-camera-file'].forEach(id => {
     const input = document.getElementById(id);
     if (input) input.value = '';
@@ -461,7 +613,9 @@ function removeSelectedPhoto() {
 
 function clearBackgroundRemovedPhoto() {
   if (backgroundRemovedPhotoUrl) URL.revokeObjectURL(backgroundRemovedPhotoUrl);
+  releasePreviewImage(backgroundRemovedPhotoPreview, backgroundRemovedPhoto);
   backgroundRemovedPhoto = null;
+  backgroundRemovedPhotoPreview = null;
   backgroundRemovedPhotoUrl = null;
 }
 
@@ -481,8 +635,25 @@ function startPhotoBackgroundRemoval() {
       clearBackgroundRemovedPhoto();
       backgroundRemovedPhoto = img;
       backgroundRemovedPhotoUrl = imageUrl;
-      setBackgroundRemovalStatus('Background removed', 'success');
-      redrawEditorCanvas();
+      const dimensions = getScaledDimensions(
+        img.naturalWidth || img.width,
+        img.naturalHeight || img.height,
+        MAX_EDITOR_PREVIEW_EDGE,
+        MAX_EDITOR_PREVIEW_PIXELS
+      );
+      createPreviewImage(img, dimensions.width, dimensions.height).then(preview => {
+        if (uploadToken !== photoUploadToken || !isBackgroundRemovalEnabled || backgroundRemovedPhoto !== img) {
+          releasePreviewImage(preview, img);
+          return;
+        }
+        backgroundRemovedPhotoPreview = preview;
+        setBackgroundRemovalStatus('Background removed', 'success');
+        redrawEditorCanvas();
+      }).catch(error => {
+        console.error('Unable to create a background-removal preview:', error);
+        setBackgroundRemovalStatus('Background removed. Preview is using the original photo.', 'success');
+        redrawEditorCanvas();
+      });
     };
     img.onerror = () => {
       URL.revokeObjectURL(imageUrl);
@@ -501,6 +672,8 @@ function startPhotoBackgroundRemoval() {
 function handleBackgroundRemovalToggle(enabled) {
   isBackgroundRemovalEnabled = enabled;
   syncBackgroundRemovalButton();
+  const selectionToggle = document.getElementById('selection-background-removal-toggle');
+  if (selectionToggle) selectionToggle.checked = enabled;
   cancelImageBackgroundRemoval();
   if (enabled) {
     startPhotoBackgroundRemoval();
@@ -508,6 +681,10 @@ function handleBackgroundRemovalToggle(enabled) {
   }
   clearBackgroundRemovedPhoto();
   redrawEditorCanvas();
+}
+
+function handleSelectionBackgroundRemovalToggle(enabled) {
+  handleBackgroundRemovalToggle(enabled);
 }
 
 function toggleBackgroundRemovalFromToolbar() {
@@ -523,6 +700,8 @@ function syncBackgroundRemovalButton() {
   const button = document.getElementById('tool-background-button');
   const icon = document.getElementById('background-removal-button-icon');
   if (button) button.setAttribute('aria-pressed', String(isBackgroundRemovalEnabled));
+  const selectionToggle = document.getElementById('selection-background-removal-toggle');
+  if (selectionToggle) selectionToggle.checked = isBackgroundRemovalEnabled;
   if (icon) icon.className = isBackgroundRemovalEnabled
     ? 'fa-solid fa-square-check'
     : 'fa-regular fa-square';
@@ -692,9 +871,21 @@ function redrawEditorCanvas() {
   }
   if (!activePreset) return;
 
-  const W = editorCanvas.width;
-  const H = editorCanvas.height;
-  editorCtx.clearRect(0, 0, W, H);
+  drawEditorComposition(
+    editorCtx,
+    editorCanvas.width,
+    editorCanvas.height,
+    backgroundRemovedPhotoPreview || userCapturedImagePreview || backgroundRemovedPhoto || userCapturedImage,
+    activePresetFramePreviewImg,
+    activePreset,
+    photoX,
+    photoY,
+    editorCanvas.width / (activePresetFrameImg?.naturalWidth || activePresetFrameImg?.width || editorCanvas.width)
+  );
+}
+
+function drawEditorComposition(ctx, W, H, photo, frameImage, preset, positionX, positionY, fontScale) {
+  ctx.clearRect(0, 0, W, H);
 
   const textInput = document.getElementById('input-editor-text');
   const textXSlider = document.getElementById('slider-text-x');
@@ -702,79 +893,78 @@ function redrawEditorCanvas() {
   const fontSizeSlider = document.getElementById('slider-font-size');
   const textColorPicker = document.getElementById('picker-text-color');
 
-  const textVal = textInput ? textInput.value : (activePreset.defaultText || 'GUEST NAME');
-  const textX = textXSlider ? W * parseInt(textXSlider.value) / 100 : W * (activePreset.textXPercent || 50) / 100;
-  const textY = textYSlider ? H * parseInt(textYSlider.value) / 100 : H * (activePreset.textYPercent || 88) / 100;
-  const fontSize = fontSizeSlider ? parseInt(fontSizeSlider.value) : (activePreset.fontSize || 32);
-  const textColor = textColorPicker ? textColorPicker.value : (activePreset.textColor || '#ffffff');
+  const textVal = textInput ? textInput.value : (preset.defaultText || 'GUEST NAME');
+  const textX = textXSlider ? W * parseInt(textXSlider.value) / 100 : W * (preset.textXPercent || 50) / 100;
+  const textY = textYSlider ? H * parseInt(textYSlider.value) / 100 : H * (preset.textYPercent || 88) / 100;
+  const fontSize = (fontSizeSlider ? parseInt(fontSizeSlider.value) : (preset.fontSize || 32)) * fontScale;
+  const textColor = textColorPicker ? textColorPicker.value : (preset.textColor || '#ffffff');
 
-  const fontFamily = activePreset.fontFamily || 'Inter';
-  const fontWeight = activePreset.fontWeight || 'bold';
+  const fontFamily = preset.fontFamily || 'Inter';
+  const fontWeight = preset.fontWeight || 'bold';
 
-  const layerZ = getEditorLayerZ();
-  renderCanvasLayers(editorCtx, [
+  const layerZ = getEditorLayerZ(preset);
+  renderCanvasLayers(ctx, [
     {
       zIndex: layerZ.photo,
       draw: () => {
-        const photo = backgroundRemovedPhoto || userCapturedImage;
         if (!photo) return;
         const fitScale = Math.min(W / photo.width, H / photo.height);
         const drawW = photo.width * fitScale * photoScale;
         const drawH = photo.height * fitScale * photoScale;
-        drawMaskedPhotoLayer(editorCtx, {
+        drawMaskedPhotoLayer(ctx, {
           width: W,
           height: H,
           image: photo,
-          x: photoX,
-          y: photoY,
+          x: positionX,
+          y: positionY,
           drawWidth: drawW,
           drawHeight: drawH,
           rotation: photoRotation,
-          maskAnchorX: W * Number(activePreset.anchorXPercent ?? 50) / 100,
-          maskAnchorY: H * Number(activePreset.anchorYPercent ?? 45) / 100,
-          masks: activePreset.masks || []
+          maskAnchorX: W * Number(preset.anchorXPercent ?? 50) / 100,
+          maskAnchorY: H * Number(preset.anchorYPercent ?? 45) / 100,
+          masks: preset.masks || []
         });
       }
     },
     {
       zIndex: layerZ.template,
       draw: () => {
-        if (activePresetFrameImg) editorCtx.drawImage(activePresetFrameImg, 0, 0, W, H);
-        else drawFallbackFrameArtwork(editorCtx, W, H);
+        if (frameImage) ctx.drawImage(frameImage, 0, 0, W, H);
+        else drawFallbackFrameArtwork(ctx, W, H, preset);
       }
     },
     {
       zIndex: layerZ.text,
       draw: () => {
         if (!editorTextEnabled) return;
-        editorCtx.save();
-        editorCtx.fillStyle = textColor;
-        editorCtx.font = `${fontWeight} ${fontSize}px "${fontFamily}", sans-serif`;
-        editorCtx.textAlign = 'center';
-        editorCtx.textBaseline = 'middle';
-        editorCtx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
-        editorCtx.lineWidth = Math.max(2, fontSize / 12);
-        editorCtx.strokeText(textVal, textX, textY);
-        editorCtx.fillText(textVal, textX, textY);
-        editorCtx.restore();
+        ctx.save();
+        ctx.fillStyle = textColor;
+        ctx.font = `${fontWeight} ${fontSize}px "${fontFamily}", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.lineWidth = Math.max(2, fontSize / 12);
+        ctx.strokeText(textVal, textX, textY);
+        ctx.fillText(textVal, textX, textY);
+        ctx.restore();
       }
     }
   ]);
 }
 
-function drawFallbackFrameArtwork(ctx, W, H) {
-  if (activePreset && activePreset.id === 'classic_polaroid') {
-    ctx.fillStyle = activePreset.frameColor || '#f8fafc';
+function drawFallbackFrameArtwork(ctx, W, H, preset = activePreset) {
+  if (preset && preset.id === 'classic_polaroid') {
+    ctx.fillStyle = preset.frameColor || '#f8fafc';
     ctx.fillRect(0, 0, W, 40);
     ctx.fillRect(0, 0, 40, H);
     ctx.fillRect(W - 40, 0, 40, H);
     ctx.fillRect(0, H - 130, W, 130);
   } else {
-    ctx.strokeStyle = activePreset ? activePreset.frameColor : '#3b82f6';
+    ctx.strokeStyle = preset ? preset.frameColor : '#3b82f6';
     ctx.lineWidth = 16;
     ctx.strokeRect(16, 16, W - 32, H - 32);
 
-    ctx.fillStyle = activePreset ? activePreset.frameColor : '#3b82f6';
+    ctx.fillStyle = preset ? preset.frameColor : '#3b82f6';
     ctx.fillRect(W / 2 - 140, 16, 280, 42);
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 16px Inter, sans-serif';
@@ -919,31 +1109,96 @@ function setupCanvasInteractions() {
   editorCanvas.addEventListener('wheel', onWheel, { passive: false });
 }
 
-function downloadCanvasComposite() {
+function setCompositeDownloadStatus(message, state = 'loading') {
+  const button = document.getElementById('download-composite-button');
+  const icon = document.getElementById('download-composite-icon');
+  const label = document.getElementById('download-composite-label');
+  const status = document.getElementById('download-composite-status');
+  if (button) {
+    button.disabled = state === 'loading';
+    button.setAttribute('aria-busy', String(state === 'loading'));
+  }
+  if (icon) {
+    icon.className = state === 'loading'
+      ? 'fa-solid fa-spinner fa-spin'
+      : state === 'error'
+        ? 'fa-solid fa-circle-exclamation'
+        : 'fa-solid fa-download';
+  }
+  if (label) {
+    label.textContent = state === 'loading'
+      ? 'Preparing full-quality image...'
+      : 'Download full-quality image';
+  }
+  if (status) {
+    status.textContent = message;
+    status.hidden = !message;
+  }
+}
+
+async function createFullResolutionExportBlob() {
+  const width = activePresetFrameImg?.naturalWidth || activePresetFrameImg?.width || editorCanvas.width;
+  const height = activePresetFrameImg?.naturalHeight || activePresetFrameImg?.height || editorCanvas.height;
+  if (width > MAX_EXPORT_EDGE || height > MAX_EXPORT_EDGE || width * height > MAX_EXPORT_PIXELS) {
+    throw new Error(`This template is ${width} × ${height} pixels, which is too large to safely export on a phone.`);
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Unable to prepare a full-quality image.');
+
+  drawEditorComposition(
+    ctx,
+    width,
+    height,
+    backgroundRemovedPhoto || userCapturedImage,
+    activePresetFrameImg,
+    activePreset,
+    photoX * width / editorCanvas.width,
+    photoY * height / editorCanvas.height,
+    1
+  );
+
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('The browser could not encode the image.');
+  return blob;
+}
+
+async function downloadCanvasComposite() {
   if (!userCapturedImage) {
     showToast('Load a photo first');
     return;
   }
+  if (isCompositeExportInProgress) return;
 
+  isCompositeExportInProgress = true;
+  setCompositeDownloadStatus('Preparing the original-resolution composition. This may take a moment.');
   try {
-    editorCanvas.toBlob(blob => {
-      if (!blob) {
-        console.error('Unable to encode the canvas as a PNG.');
-        showToast('Unable to create PNG. Please try again.');
-        return;
-      }
-
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.download = `SnapStudio_Export_${Date.now()}.png`;
-      link.href = objectUrl;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      showToast('PNG image downloaded');
-    }, 'image/png');
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const blob = await createFullResolutionExportBlob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.download = `SnapStudio_Export_${Date.now()}.png`;
+    link.href = objectUrl;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    setCompositeDownloadStatus('Your full-quality PNG is ready.', 'success');
+    showToast('PNG image downloaded');
   } catch (error) {
     console.error('Failed to export the canvas as a PNG:', error);
-    showToast('Unable to download PNG. Please try again.');
+    setCompositeDownloadStatus(error.message || 'Unable to prepare the PNG. Please try again.', 'error');
+    showToast(error.message || 'Unable to download PNG. Please try again.');
+  } finally {
+    isCompositeExportInProgress = false;
+    const button = document.getElementById('download-composite-button');
+    if (button) {
+      button.disabled = false;
+      button.setAttribute('aria-busy', 'false');
+    }
   }
 }
 
@@ -952,20 +1207,38 @@ async function shareCanvasComposite() {
     showToast('Load a photo first');
     return;
   }
+  if (isCompositeExportInProgress) {
+    showToast('An image export is already in progress.');
+    return;
+  }
 
+  isCompositeExportInProgress = true;
+  setCompositeDownloadStatus('Preparing the original-resolution image for sharing.');
   try {
-    const blob = await new Promise(resolve => editorCanvas.toBlob(resolve, 'image/png'));
-    if (!blob) throw new Error('Unable to encode the canvas as a PNG.');
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const blob = await createFullResolutionExportBlob();
     const file = new File([blob], 'SnapStudio-creation.png', { type: 'image/png' });
     if (navigator.canShare?.({ files: [file] }) && navigator.share) {
       await navigator.share({ files: [file], title: 'My SnapStudio creation' });
+      setCompositeDownloadStatus('Image shared. The full-quality download is ready below the preview.', 'success');
       return;
     }
     showToast('Sharing is not available in this browser. Download the PNG instead.');
+    setCompositeDownloadStatus('Sharing is not available. Use Download full-quality image instead.', 'error');
   } catch (error) {
-    if (error.name !== 'AbortError') {
+    if (error.name === 'AbortError') {
+      setCompositeDownloadStatus('Sharing canceled. Your composition is unchanged.', 'success');
+    } else {
       console.error('Unable to share the canvas:', error);
       showToast('Unable to share this image. Try downloading the PNG.');
+      setCompositeDownloadStatus(error.message || 'Unable to prepare the image for sharing.', 'error');
+    }
+  } finally {
+    isCompositeExportInProgress = false;
+    const button = document.getElementById('download-composite-button');
+    if (button) {
+      button.disabled = false;
+      button.setAttribute('aria-busy', 'false');
     }
   }
 }

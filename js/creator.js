@@ -419,6 +419,9 @@ function drawCreatorMaskOutline(mask) {
 
 function generateCreatorPresetObject() {
   const presetId = document.getElementById('preset-id-input').value;
+  const thumbnailUrl = creatorFrameImage
+    ? generateCreatorThumbnailDataUrl(creatorFrameImage)
+    : '';
   return {
     id: presetId,
     title: presetId.replace(/_/g, ' ').toUpperCase(),
@@ -439,8 +442,20 @@ function generateCreatorPresetObject() {
       template: Number(document.getElementById('creator-template-z').value),
       text: Number(document.getElementById('creator-text-z').value)
     },
-    frameImageUrl: creatorFrameImageDataUrl || ""
+    frameImageUrl: creatorFrameImageDataUrl || "",
+    thumbnailUrl
   };
+}
+
+function generateCreatorThumbnailDataUrl(image) {
+  const scale = Math.min(1, 360 / Math.max(image.width, image.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('Unable to prepare a preset thumbnail.');
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/webp', 0.78);
 }
 
 function exportCreatorPresetJSON() {

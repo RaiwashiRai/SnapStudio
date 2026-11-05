@@ -45,7 +45,7 @@
       </header>
 
       <div class="setup-grid">
-        <section class="setup-section" aria-labelledby="photo-step-title">
+        <section class="setup-section photo-selection-section" aria-labelledby="photo-step-title">
           <div class="setup-section-heading">
             <span class="step-number">01</span>
             <div><h2 id="photo-step-title">Add your photo</h2><p>Take one now or choose an image from your device.</p></div>
@@ -64,6 +64,15 @@
             <img id="selected-photo-thumbnail" alt="Selected photo preview">
             <div class="selected-photo-copy"><strong>Photo ready</strong><span>Your image stays on this device.</span></div>
             <button type="button" class="icon-action remove-photo-button" onclick="removeSelectedPhoto()" title="Remove selected photo" aria-label="Remove selected photo"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+          </div>
+          <label class="selection-background-removal-option">
+            <input id="selection-background-removal-toggle" type="checkbox" onchange="handleSelectionBackgroundRemovalToggle(this.checked)">
+            <span>Remove background while I choose a template</span>
+          </label>
+          <p class="selection-background-removal-note">Optional. Downloads and runs the model only when selected; you can continue while it works.</p>
+          <div id="selection-background-removal-status" class="background-status hidden" role="status" aria-live="polite">
+            <div><i id="selection-background-removal-status-icon" class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span id="selection-background-removal-status-text"></span></div>
+            <div id="selection-background-removal-progress-track" class="progress-track" role="progressbar" aria-label="Background removal progress" aria-valuemin="0" aria-valuemax="100"><div id="selection-background-removal-progress-bar"></div></div>
           </div>
         </section>
 
@@ -101,7 +110,6 @@
         </div>
         <div class="export-actions">
           <button type="button" onclick="shareCanvasComposite()" title="Share image" aria-label="Share image"><i class="fa-solid fa-share-nodes" aria-hidden="true"></i><span>Share</span></button>
-          <button type="button" class="download-action" onclick="downloadCanvasComposite()" title="Download PNG"><i class="fa-solid fa-download" aria-hidden="true"></i><span>Download</span></button>
         </div>
       </header>
 
@@ -177,6 +185,14 @@
           <canvas id="editor-canvas" width="800" height="800" class="cursor-grab active:cursor-grabbing"></canvas>
         </div>
         <p class="stage-caption">Drag to position when Pan &amp; zoom is enabled. Edits stay in your browser.</p>
+        <div class="editor-download-panel">
+          <button id="download-composite-button" class="download-composite-button" type="button" onclick="downloadCanvasComposite()">
+            <i id="download-composite-icon" class="fa-solid fa-download" aria-hidden="true"></i>
+            <span id="download-composite-label">Download full-quality image</span>
+          </button>
+          <p>Composed at the template’s original resolution.</p>
+          <p id="download-composite-status" class="download-composite-status" role="status" aria-live="polite" hidden></p>
+        </div>
       </div>
 
   </main>
@@ -194,6 +210,6 @@
   <script src="./js/state.js"></script>
   <script src="./js/compositor.js"></script>
   <script src="./js/backgroundRemoval.js"></script>
-  <script src="./js/canvasRenderer.js?v=4"></script>
+  <script src="./js/canvasRenderer.js?v=5"></script>
 </body>
 </html>

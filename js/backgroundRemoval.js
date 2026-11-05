@@ -18,31 +18,41 @@ async function removeImageBackground(imageSource, model, onProgress) {
 }
 
 function setBackgroundRemovalStatus(message, state = 'loading') {
-  const status = document.getElementById('background-removal-status');
-  const statusText = document.getElementById('background-removal-status-text');
-  if (!status || !statusText) return;
-
-  const progressBar = document.getElementById('background-removal-progress-bar');
-  const progressTrack = document.getElementById('background-removal-progress-track');
   const progressMatch = message.match(/(\d{1,3})%/);
   const progress = progressMatch ? Math.min(100, Number(progressMatch[1])) : 0;
-  if (progressBar) progressBar.style.width = `${progress}%`;
-  if (progressTrack) {
-    progressTrack.setAttribute('aria-valuenow', String(progress));
-    progressTrack.hidden = state !== 'error' && state !== 'success' && !progressMatch;
-  }
-
-  const icon = document.getElementById('background-removal-status-icon');
-  if (icon) {
-    icon.className = state === 'error'
-      ? 'fa-solid fa-circle-exclamation mr-1 text-amber-400'
-      : state === 'success'
-        ? 'fa-solid fa-circle-check mr-1 text-emerald-400'
-        : 'fa-solid fa-spinner fa-spin mr-1';
-  }
-  statusText.textContent = message;
-  status.hidden = !message;
-  status.classList.toggle('hidden', !message);
+  [
+    {
+      status: document.getElementById('background-removal-status'),
+      text: document.getElementById('background-removal-status-text'),
+      icon: document.getElementById('background-removal-status-icon'),
+      track: document.getElementById('background-removal-progress-track'),
+      bar: document.getElementById('background-removal-progress-bar')
+    },
+    {
+      status: document.getElementById('selection-background-removal-status'),
+      text: document.getElementById('selection-background-removal-status-text'),
+      icon: document.getElementById('selection-background-removal-status-icon'),
+      track: document.getElementById('selection-background-removal-progress-track'),
+      bar: document.getElementById('selection-background-removal-progress-bar')
+    }
+  ].forEach(({ status, text, icon, track, bar }) => {
+    if (!status || !text) return;
+    if (bar) bar.style.width = `${progress}%`;
+    if (track) {
+      track.setAttribute('aria-valuenow', String(progress));
+      track.hidden = state !== 'error' && state !== 'success' && !progressMatch;
+    }
+    if (icon) {
+      icon.className = state === 'error'
+        ? 'fa-solid fa-circle-exclamation mr-1 text-amber-400'
+        : state === 'success'
+          ? 'fa-solid fa-circle-check mr-1 text-emerald-400'
+          : 'fa-solid fa-spinner fa-spin mr-1';
+    }
+    text.textContent = message;
+    status.hidden = !message;
+    status.classList.toggle('hidden', !message);
+  });
 }
 
 async function processImageBackgroundRemoval(imageSource, model, onComplete, onError) {
