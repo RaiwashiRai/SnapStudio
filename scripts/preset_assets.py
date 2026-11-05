@@ -131,7 +131,7 @@ def format_dimensions(image):
 def write_frame_webp(image, path):
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = "RGBA" if "A" in image.getbands() or "transparency" in image.info else "RGB"
-    image.convert(mode).save(path, format="WEBP", lossless=True, method=6)
+    image.convert(mode).save(path, format="WEBP", quality=90, method=6, exact=True)
 
 
 def write_thumbnail(image, path, max_edge=360):
