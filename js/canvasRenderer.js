@@ -118,15 +118,25 @@ function renderPresetTemplates() {
     const preview = document.createElement('span');
     preview.className = 'template-choice-preview checkerboard';
     if (p.frameImageUrl) {
+      const thumbnailLoader = document.createElement('span');
+      thumbnailLoader.className = 'template-thumbnail-loading';
+      thumbnailLoader.setAttribute('aria-hidden', 'true');
+      preview.appendChild(thumbnailLoader);
+
       const image = document.createElement('img');
       image.alt = '';
       image.loading = 'lazy';
-      image.src = p.frameImageUrlCandidates?.[0] || p.frameImageUrl;
+      image.onload = () => thumbnailLoader.remove();
       image.onerror = () => {
         const nextUrl = p.frameImageUrlCandidates?.find(url => url !== image.src);
-        if (nextUrl) image.src = nextUrl;
-        else image.remove();
+        if (nextUrl) {
+          image.src = nextUrl;
+          return;
+        }
+        thumbnailLoader.remove();
+        image.remove();
       };
+      image.src = p.frameImageUrlCandidates?.[0] || p.frameImageUrl;
       preview.appendChild(image);
     } else {
       preview.style.setProperty('--template-color', p.frameColor || '#64748b');
