@@ -1,0 +1,53 @@
+{
+  "result": "passed",
+  "runDate": "2026-10-29",
+  "assetMatrix": {
+    "templates": [
+      {
+        "file": "Templates/1135w-9hDBwyI3yhc.jpg",
+        "dimensions": "1135x1600"
+      },
+      {
+        "file": "Templates/800w-S-Lmuiq2Q2Q.webp",
+        "dimensions": "800x568"
+      }
+    ],
+    "peopleImages": [
+      {
+        "file": "PeopleImages/images.jpg",
+        "dimensions": "439x626"
+      },
+      {
+        "file": "PeopleImages/images (1).jpg",
+        "dimensions": "540x360"
+      },
+      {
+        "file": "PeopleImages/images (2).jpg",
+        "dimensions": "540x360"
+      }
+    ],
+    "combinationsRendered": 6
+  },
+  "assertions": {
+    "maskShapes": {
+      "rectangle": "center opaque; outside mask transparent",
+      "ellipse": "center opaque; outside mask transparent",
+      "diamond": "center opaque; outside mask transparent"
+    },
+    "maskedPhotoInsideMaskOpaque": true,
+    "maskedPhotoOutsideMaskTransparent": true,
+    "templatePixelOutsideMaskPreserved": true,
+    "maskOffsetsUsePhotoAnchorAndTemplateDimensions": true,
+    "maskSizeUsesTemplateDimensions": true,
+    "maskScaleAndRotationApplied": true,
+    "editorHasNoMaskControls": true,
+    "downloadButtonIsNearStage": true,
+    "templateDimensionsUsedForCanvas": true,
+    "presetStoresMaskAndLayerZIndex": true
+  },
+  "screenshots": [
+    "creator-stage.png",
+    "editor-stage.png",
+    "masked-result.png"
+  ]
+}
