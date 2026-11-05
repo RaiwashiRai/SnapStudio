@@ -1,21 +1,6 @@
-let backgroundRemovalModulePromise = null;
+let backgroundRemovalWorker = null;
 let backgroundRemovalRequestId = 0;
-
-async function removeImageBackground(imageSource, model, onProgress) {
-  if (!backgroundRemovalModulePromise) {
-    backgroundRemovalModulePromise = import('https://esm.sh/@imgly/background-removal@1.5.8?bundle')
-      .catch(error => {
-        backgroundRemovalModulePromise = null;
-        throw error;
-      });
-  }
-
-  const { removeBackground } = await backgroundRemovalModulePromise;
-  return removeBackground(imageSource, {
-    model,
-    progress: (key, current, total) => onProgress(key, current, total)
-  });
-}
+let pendingBackgroundRemoval = null;
 
 function setBackgroundRemovalStatus(message, state = 'loading') {
   const progressMatch = message.match(/(\d{1,3})%/);
@@ -55,30 +40,102 @@ function setBackgroundRemovalStatus(message, state = 'loading') {
   });
 }
 
-async function processImageBackgroundRemoval(imageSource, model, onComplete, onError) {
+function stopBackgroundRemovalWorker() {
+  if (backgroundRemovalWorker) {
+    backgroundRemovalWorker.terminate();
+    backgroundRemovalWorker = null;
+  }
+}
+
+function failBackgroundRemoval(requestId, error) {
+  if (!pendingBackgroundRemoval || pendingBackgroundRemoval.id !== requestId) return;
+  const { onError } = pendingBackgroundRemoval;
+  pendingBackgroundRemoval = null;
+  console.error('Background removal failed:', error);
+  const message = error instanceof TypeError
+    ? 'Could not load the background-removal model. Check your internet connection and try again.'
+    : `Background removal failed${error instanceof Error && error.message ? `: ${error.message}` : '.'}`;
+  setBackgroundRemovalStatus(message, 'error');
+  onError(error, message);
+}
+
+function createBackgroundRemovalWorker() {
+  const worker = new Worker(new URL('./js/backgroundRemovalWorker.js', document.baseURI), { type: 'module' });
+  worker.addEventListener('message', event => {
+    if (backgroundRemovalWorker !== worker) return;
+    const message = event.data;
+    if (message.type === 'ready') return;
+    if (!pendingBackgroundRemoval || message.requestId !== pendingBackgroundRemoval.id) return;
+
+    if (message.type === 'progress') {
+      const progress = message.total > 0 ? ` ${Math.round(message.current / message.total * 100)}%` : '';
+      setBackgroundRemovalStatus(`Loading ${message.key}...${progress}`);
+      return;
+    }
+
+    if (message.type === 'result') {
+      if (!(message.blob instanceof Blob)) {
+        failBackgroundRemoval(message.requestId, new Error('The background-removal worker returned an invalid image.'));
+        return;
+      }
+      const { onComplete } = pendingBackgroundRemoval;
+      pendingBackgroundRemoval = null;
+      onComplete(message.blob);
+      return;
+    }
+
+    if (message.type === 'error') {
+      const error = message.name === 'TypeError'
+        ? new TypeError(message.message)
+        : new Error(message.message || 'The background-removal worker failed.');
+      failBackgroundRemoval(message.requestId, error);
+    }
+  });
+  worker.addEventListener('error', event => {
+    if (backgroundRemovalWorker !== worker || !pendingBackgroundRemoval) return;
+    event.preventDefault();
+    const requestId = pendingBackgroundRemoval.id;
+    stopBackgroundRemovalWorker();
+    failBackgroundRemoval(requestId, new Error(event.message || 'The background-removal worker could not start.'));
+  });
+  worker.addEventListener('messageerror', () => {
+    if (backgroundRemovalWorker !== worker || !pendingBackgroundRemoval) return;
+    const requestId = pendingBackgroundRemoval.id;
+    stopBackgroundRemovalWorker();
+    failBackgroundRemoval(requestId, new Error('Unable to receive the processed image from the worker.'));
+  });
+  return worker;
+}
+
+function processImageBackgroundRemoval(imageSource, model, onComplete, onError) {
   const requestId = ++backgroundRemovalRequestId;
-  setBackgroundRemovalStatus('Preparing model...');
+  if (pendingBackgroundRemoval) {
+    pendingBackgroundRemoval = null;
+    stopBackgroundRemovalWorker();
+  }
+  setBackgroundRemovalStatus('Preparing model in background...');
 
   try {
-    const result = await removeImageBackground(imageSource, model, (key, current, total) => {
-      if (requestId !== backgroundRemovalRequestId) return;
-      const progress = total > 0 ? ` ${Math.round(current / total * 100)}%` : '';
-      setBackgroundRemovalStatus(`Loading ${key}...${progress}`);
+    pendingBackgroundRemoval = { id: requestId, onComplete, onError };
+    if (typeof Worker !== 'function') {
+      throw new Error('Background removal requires browser Web Worker support.');
+    }
+    backgroundRemovalWorker = backgroundRemovalWorker || createBackgroundRemovalWorker();
+    backgroundRemovalWorker.postMessage({
+      type: 'remove-background',
+      requestId,
+      imageSource,
+      model
     });
-
-    if (requestId === backgroundRemovalRequestId) onComplete(result);
   } catch (error) {
-    if (requestId !== backgroundRemovalRequestId) return;
-    console.error('Background removal failed:', error);
-    const message = error instanceof TypeError
-      ? 'Could not load the background-removal model. Check your internet connection and try again.'
-      : `Background removal failed${error instanceof Error && error.message ? `: ${error.message}` : '.'}`;
-    setBackgroundRemovalStatus(message, 'error');
-    onError(error, message);
+    stopBackgroundRemovalWorker();
+    failBackgroundRemoval(requestId, error);
   }
 }
 
 function cancelImageBackgroundRemoval() {
   backgroundRemovalRequestId += 1;
+  pendingBackgroundRemoval = null;
+  stopBackgroundRemovalWorker();
   setBackgroundRemovalStatus('');
 }

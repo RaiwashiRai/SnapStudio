@@ -69,7 +69,7 @@
             <input id="selection-background-removal-toggle" type="checkbox" onchange="handleSelectionBackgroundRemovalToggle(this.checked)">
             <span>Remove background while I choose a template</span>
           </label>
-          <p class="selection-background-removal-note">Optional. Downloads and runs the model only when selected; you can continue while it works.</p>
+          <p class="selection-background-removal-note">Optional. Downloads the model only when selected and processes it in the background so you can keep using the page.</p>
           <div id="selection-background-removal-status" class="background-status hidden" role="status" aria-live="polite">
             <div><i id="selection-background-removal-status-icon" class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i><span id="selection-background-removal-status-text"></span></div>
             <div id="selection-background-removal-progress-track" class="progress-track" role="progressbar" aria-label="Background removal progress" aria-valuemin="0" aria-valuemax="100"><div id="selection-background-removal-progress-bar"></div></div>
@@ -133,7 +133,7 @@
           <select id="background-model-selector" onchange="handleBackgroundModelChange()">
             <option value="isnet_fp16">Balanced</option><option value="isnet">High compatibility</option><option value="isnet_quint8">Smaller download</option>
           </select>
-          <p class="tool-note">The model downloads on first use (typically 40–80 MB). Your photo stays on this device.</p>
+          <p class="tool-note">The model downloads on first use (typically 40–80 MB) and runs in a background worker. Your photo stays on this device.</p>
         </section>
       </section>
 
