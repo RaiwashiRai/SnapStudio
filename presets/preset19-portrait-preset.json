@@ -1,6 +1,6 @@
 {
-  "id": "preset14",
-  "title": "PRESET14",
+  "id": "preset19-portrait",
+  "title": "PRESET19-PORTRAIT",
   "frameColor": "#3b82f6",
   "textColor": "#ffffff",
   "defaultText": "GUEST NAME",
@@ -21,7 +21,7 @@
       "widthPercent": 100,
       "heightPercent": 100,
       "scale": 0.95,
-      "rotation": -5
+      "rotation": 0
     }
   ],
   "zIndex": {
@@ -29,6 +29,6 @@
     "template": 2,
     "text": 3
   },
-  "frameImageUrl": "./Templates/preset14.webp",
-  "thumbnailUrl": "./Templates/preset14-thumb.webp"
+  "frameImageUrl": "./Templates/preset19-portrait.webp",
+  "thumbnailUrl": "./Templates/preset19-portrait-thumb.webp"
 }

@@ -1,0 +1,34 @@
+{
+  "id": "preset14-portrait",
+  "title": "PRESET14-PORTRAIT",
+  "frameColor": "#3b82f6",
+  "textColor": "#ffffff",
+  "defaultText": "GUEST NAME",
+  "textEnabled": false,
+  "fontFamily": "Inter",
+  "fontWeight": "bold",
+  "textXPercent": 50,
+  "textYPercent": 88,
+  "fontSize": 32,
+  "anchorXPercent": 49,
+  "anchorYPercent": 49,
+  "masks": [
+    {
+      "enabled": false,
+      "shape": "rectangle",
+      "xPercent": 0,
+      "yPercent": 0,
+      "widthPercent": 100,
+      "heightPercent": 100,
+      "scale": 0.95,
+      "rotation": -5
+    }
+  ],
+  "zIndex": {
+    "photo": 3,
+    "template": 2,
+    "text": 3
+  },
+  "frameImageUrl": "./Templates/preset14.webp",
+  "thumbnailUrl": "./Templates/preset14-thumb.webp"
+}
