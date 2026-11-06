@@ -1,0 +1,34 @@
+{
+  "id": "preset15",
+  "title": "PRESET15",
+  "frameColor": "#3b82f6",
+  "textColor": "#ffffff",
+  "defaultText": "GUEST NAME",
+  "textEnabled": false,
+  "fontFamily": "Inter",
+  "fontWeight": "bold",
+  "textXPercent": 50,
+  "textYPercent": 88,
+  "fontSize": 32,
+  "anchorXPercent": 49,
+  "anchorYPercent": 49,
+  "masks": [
+    {
+      "enabled": false,
+      "shape": "rectangle",
+      "xPercent": 0,
+      "yPercent": 0,
+      "widthPercent": 100,
+      "heightPercent": 100,
+      "scale": 0.95,
+      "rotation": 0
+    }
+  ],
+  "zIndex": {
+    "photo": 3,
+    "template": 2,
+    "text": 3
+  },
+  "frameImageUrl": "./Templates/preset15.webp",
+  "thumbnailUrl": "./Templates/preset15-thumb.webp"
+}

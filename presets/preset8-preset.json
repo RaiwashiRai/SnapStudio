@@ -1,0 +1,34 @@
+{
+  "id": "preset8",
+  "title": "PRESET8",
+  "frameColor": "#3b82f6",
+  "textColor": "#ffffff",
+  "defaultText": "GUEST NAME",
+  "textEnabled": false,
+  "fontFamily": "Inter",
+  "fontWeight": "bold",
+  "textXPercent": 50,
+  "textYPercent": 88,
+  "fontSize": 32,
+  "anchorXPercent": 50,
+  "anchorYPercent": 50,
+  "masks": [
+    {
+      "enabled": false,
+      "shape": "rectangle",
+      "xPercent": 0,
+      "yPercent": 0,
+      "widthPercent": 100,
+      "heightPercent": 100,
+      "scale": 1,
+      "rotation": 0
+    }
+  ],
+  "zIndex": {
+    "photo": 3,
+    "template": 2,
+    "text": 3
+  },
+  "frameImageUrl": "./Templates/preset8.webp",
+  "thumbnailUrl": "./Templates/preset8-thumb.webp"
+}
